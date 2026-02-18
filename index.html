@@ -94,7 +94,7 @@
     function animatePath({ map, path, duration, startBearing, startAltitude, pitch }) {
       _previousCameraPosition = null;
       return new Promise((resolve) => {
-        const pathDistance = turf.lineDistance(path);
+        const pathDistance = turf.length(path);
         let startTime;
 
         const frame = (currentTime) => {
