@@ -40,16 +40,45 @@
         margin: 0;
         font-family: system-ui, sans-serif;
       }
+      #panelWrapper {
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 10;
+        display: flex;
+        align-items: flex-start;
+      }
+      #panelToggle {
+        width: 28px;
+        min-height: 44px;
+        padding: 10px 6px;
+        background: var(--panel-bg);
+        color: var(--panel-text);
+        border: none;
+        border-radius: 0 8px 8px 0;
+        box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
+        cursor: pointer;
+        font-size: 18px;
+        line-height: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+      #panelToggle:hover {
+        background: var(--input-bg);
+      }
       #input {
-        position: absolute;
-        top: 10px;
-        left: 10px;
-        z-index: 1;
         background: var(--panel-bg);
         color: var(--panel-text);
         padding: 12px;
-        border-radius: 8px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        border-radius: 0 8px 8px 0;
+        box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
+        transform: translateX(-100%);
+        transition: transform 0.2s ease;
+      }
+      #panelWrapper.panel-open #input {
+        transform: translateX(0);
       }
       #map {
         width: 100vw;
@@ -165,7 +194,9 @@
     </style>
   </head>
   <body>
-    <div id="input">
+    <div id="panelWrapper">
+      <button type="button" id="panelToggle" onclick="togglePanel()" aria-label="Toggle panel">≡</button>
+      <div id="input">
       <div id="waypoints">
         <input type="text" placeholder="Start" value="New York, NY" />
         <input type="text" placeholder="End" value="Boston, MA" />
@@ -251,6 +282,7 @@
       </div>
       <div id="error"></div>
       <div id="exportStatus"></div>
+      </div>
     </div>
     <div id="map"></div>
 
@@ -335,6 +367,27 @@
         _previousCameraPosition = newCameraPosition;
         return newCameraPosition;
       }
+
+      function setPanelOpen(open) {
+        const wrapper = document.getElementById("panelWrapper");
+        wrapper.classList.toggle("panel-open", open);
+        try {
+          localStorage.setItem("panelOpen", open ? "1" : "0");
+        } catch (_) {}
+      }
+
+      function togglePanel() {
+        const wrapper = document.getElementById("panelWrapper");
+        setPanelOpen(!wrapper.classList.contains("panel-open"));
+      }
+
+      (function initPanelState() {
+        try {
+          const saved = localStorage.getItem("panelOpen");
+          if (saved !== null)
+            document.getElementById("panelWrapper").classList.toggle("panel-open", saved === "1");
+        } catch (_) {}
+      })();
 
       function toggleAnimationControls() {
         const toggle = document.getElementById("animationToggle");
@@ -596,6 +649,7 @@
 
       async function animateRoute() {
         if (!currentRoute) return;
+        setPanelOpen(false);
         const btn = document.getElementById("animateBtn");
         btn.disabled = true;
         try {
@@ -614,11 +668,13 @@
           });
         } finally {
           btn.disabled = false;
+          setPanelOpen(true);
         }
       }
 
       async function exportVideo() {
         if (!currentRoute) return;
+        setPanelOpen(false);
         const exportBtn = document.getElementById("exportBtn");
         const statusEl = document.getElementById("exportStatus");
         const mapEl = document.getElementById("map");
@@ -714,6 +770,7 @@
           mapEl.style.height = savedHeight;
           map.resize();
           exportBtn.disabled = false;
+          setPanelOpen(true);
         }
       }
     </script>
