@@ -1,454 +1,618 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Route Finder</title>
-  <script src="https://api.mapbox.com/mapbox-gl-js/v3.11.0/mapbox-gl-dev.js"></script>
-  <link href="https://api.mapbox.com/mapbox-gl-js/v3.11.0/mapbox-gl.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7/turf.min.js"></script>
-  <style>
-    * { box-sizing: border-box; }
-    body { margin: 0; font-family: system-ui, sans-serif; }
-    #input {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      z-index: 1;
-      background: white;
-      padding: 12px;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-    }
-    #map { width: 100vw; height: 100vh; }
-    input, button {
-      padding: 8px 12px;
-      margin: 4px 0;
-      width: 260px;
-      font-size: 14px;
-    }
-    button {
-      cursor: pointer;
-      background: #3b9dd2;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      font-weight: 500;
-    }
-    button:hover { background: #2d8bc0; }
-    button:disabled { opacity: 0.5; cursor: not-allowed; }
-    #error {
-      color: #c00;
-      font-size: 13px;
-      margin-top: 6px;
-      max-width: 260px;
-    }
-    .control-toggle {
-      cursor: pointer;
-      font-size: 13px;
-      font-weight: 500;
-      margin: 8px 0 4px;
-      user-select: none;
-    }
-    .control-toggle::before {
-      content: '▸ ';
-      display: inline-block;
-      transition: transform 0.2s;
-    }
-    .control-toggle.expanded::before {
-      transform: rotate(90deg);
-    }
-    #animationControls {
-      max-height: 0;
-      overflow: hidden;
-      transition: max-height 0.2s ease-out;
-    }
-    #animationControls.expanded {
-      max-height: 360px;
-    }
-    #exportStatus {
-      font-size: 12px;
-      color: #666;
-      margin-top: 4px;
-    }
-    .control-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin: 6px 0;
-      font-size: 13px;
-    }
-    .control-row input[type="checkbox"] {
-      width: auto;
-      margin: 0;
-    }
-    .control-row input[type="number"] {
-      width: 80px;
-      margin: 0 0 0 auto;
-    }
-    .control-row label {
-      flex: 1;
-      cursor: pointer;
-    }
-    .control-row select {
-      padding: 6px 8px;
-      font-size: 13px;
-    }
-  </style>
-</head>
-<body>
-  <div id="input">
-    <input id="route" type="text" placeholder="New York, NY to Boston, MA" value="New York, NY to Boston, MA">
-    <br>
-    <button onclick="getRoute()">Draw Route</button>
-    <button id="animateBtn" onclick="animateRoute()" disabled>Animate Route</button>
-    <button id="exportBtn" onclick="exportVideo()" disabled>Export video</button>
-    <div class="control-toggle" id="animationToggle" onclick="toggleAnimationControls()">Animation controls</div>
-    <div id="animationControls">
-      <div class="control-row">
-        <input type="checkbox" id="lineGradient" checked>
-        <label for="lineGradient">Line gradient</label>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Route Finder</title>
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.11.0/mapbox-gl-dev.js"></script>
+    <link
+      href="https://api.mapbox.com/mapbox-gl-js/v3.11.0/mapbox-gl.css"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7/turf.min.js"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: system-ui, sans-serif;
+      }
+      #input {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        z-index: 1;
+        background: white;
+        padding: 12px;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      }
+      #map {
+        width: 100vw;
+        height: 100vh;
+      }
+      input,
+      button {
+        padding: 8px 12px;
+        margin: 4px 0;
+        width: 260px;
+        font-size: 14px;
+      }
+      button {
+        cursor: pointer;
+        background: #3b9dd2;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-weight: 500;
+      }
+      button:hover {
+        background: #2d8bc0;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      #error {
+        color: #c00;
+        font-size: 13px;
+        margin-top: 6px;
+        max-width: 260px;
+      }
+      .control-toggle {
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 500;
+        margin: 8px 0 4px;
+        user-select: none;
+      }
+      .control-toggle::before {
+        content: "▸ ";
+        display: inline-block;
+        transition: transform 0.2s;
+      }
+      .control-toggle.expanded::before {
+        transform: rotate(90deg);
+      }
+      #animationControls {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.2s ease-out;
+      }
+      #animationControls.expanded {
+        max-height: 360px;
+      }
+      #exportStatus {
+        font-size: 12px;
+        color: #666;
+        margin-top: 4px;
+      }
+      .control-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 6px 0;
+        font-size: 13px;
+      }
+      .control-row input[type="checkbox"] {
+        width: auto;
+        margin: 0;
+      }
+      .control-row input[type="number"] {
+        width: 80px;
+        margin: 0 0 0 auto;
+      }
+      .control-row label {
+        flex: 1;
+        cursor: pointer;
+      }
+      .control-row select {
+        padding: 6px 8px;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="input">
+      <input
+        id="route"
+        type="text"
+        placeholder="New York, NY to Boston, MA"
+        value="New York, NY to Boston, MA"
+      />
+      <br />
+      <button onclick="getRoute()">Draw Route</button>
+      <button id="animateBtn" onclick="animateRoute()" disabled>
+        Animate Route
+      </button>
+      <button id="exportBtn" onclick="exportVideo()" disabled>
+        Export video
+      </button>
+      <div
+        class="control-toggle"
+        id="animationToggle"
+        onclick="toggleAnimationControls()"
+      >
+        Animation controls
       </div>
-      <div class="control-row">
-        <input type="checkbox" id="cameraFollow" checked>
-        <label for="cameraFollow">Camera follow</label>
+      <div id="animationControls">
+        <div class="control-row">
+          <input type="checkbox" id="lineGradient" checked />
+          <label for="lineGradient">Line gradient</label>
+        </div>
+        <div class="control-row">
+          <input type="checkbox" id="cameraFollow" checked />
+          <label for="cameraFollow">Camera follow</label>
+        </div>
+        <div class="control-row">
+          <input type="checkbox" id="bearingChange" checked />
+          <label for="bearingChange">Bearing change</label>
+        </div>
+        <div class="control-row">
+          <label for="duration">Duration (ms)</label>
+          <input
+            type="number"
+            id="duration"
+            value="20000"
+            min="1000"
+            step="1000"
+          />
+        </div>
+        <div class="control-row">
+          <label for="startBearing">Bearing (°)</label>
+          <input
+            type="number"
+            id="startBearing"
+            value="0"
+            min="-180"
+            max="180"
+          />
+        </div>
+        <div class="control-row">
+          <label for="startAltitude">Altitude (m)</label>
+          <input
+            type="number"
+            id="startAltitude"
+            value="12000"
+            min="100"
+            step="100"
+          />
+        </div>
+        <div class="control-row">
+          <label for="pitch">Pitch (°)</label>
+          <input type="number" id="pitch" value="50" min="0" max="85" />
+        </div>
+        <div class="control-row">
+          <label for="exportSize">Export size</label>
+          <select
+            id="exportSize"
+            style="width: 80px; margin: 0 0 0 auto; padding: 6px"
+          >
+            <option value="1280x720">16:9</option>
+            <option value="1080x1080">1:1</option>
+          </select>
+        </div>
       </div>
-      <div class="control-row">
-        <input type="checkbox" id="bearingChange" checked>
-        <label for="bearingChange">Bearing change</label>
-      </div>
-      <div class="control-row">
-        <label for="duration">Duration (ms)</label>
-        <input type="number" id="duration" value="20000" min="1000" step="1000">
-      </div>
-      <div class="control-row">
-        <label for="startBearing">Bearing (°)</label>
-        <input type="number" id="startBearing" value="0" min="-180" max="180">
-      </div>
-      <div class="control-row">
-        <label for="startAltitude">Altitude (m)</label>
-        <input type="number" id="startAltitude" value="12000" min="100" step="100">
-      </div>
-      <div class="control-row">
-        <label for="pitch">Pitch (°)</label>
-        <input type="number" id="pitch" value="50" min="0" max="85">
-      </div>
-      <div class="control-row">
-        <label for="exportSize">Export size</label>
-        <select id="exportSize" style="width: 80px; margin: 0 0 0 auto; padding: 6px;">
-          <option value="1280x720">16:9</option>
-          <option value="1080x1080">1:1</option>
-        </select>
-      </div>
+      <div id="error"></div>
+      <div id="exportStatus"></div>
     </div>
-    <div id="error"></div>
-    <div id="exportStatus"></div>
-  </div>
-  <div id="map"></div>
+    <div id="map"></div>
 
-  <script>
-    mapboxgl.accessToken = '__MAPBOX_TOKEN__';
+    <script>
+      mapboxgl.accessToken = "__MAPBOX_TOKEN__";
 
-    const map = new mapboxgl.Map({
-      container: 'map',
-      style: 'mapbox://styles/mapbox/streets-v12',
-      center: [-74.5, 40],
-      zoom: 4
-    });
+      const map = new mapboxgl.Map({
+        container: "map",
+        style: "mapbox://styles/mapbox/streets-v12",
+        center: [-74.5, 40],
+        zoom: 4,
+      });
 
-    let currentRoute = null;
+      let currentRoute = null;
 
-    function lerp(start, end, amt) {
-      return (1 - amt) * start + amt * end;
-    }
-
-    let _previousCameraPosition = null;
-
-    function computeCameraPosition(pitch, bearing, targetPosition, altitude, smooth = false) {
-      const bearingInRadian = bearing / 57.29;
-      const pitchInRadian = (90 - pitch) / 57.29;
-      const lngDiff = ((altitude / Math.tan(pitchInRadian)) * Math.sin(-bearingInRadian)) / 70000;
-      const latDiff = ((altitude / Math.tan(pitchInRadian)) * Math.cos(-bearingInRadian)) / 110000;
-      const newCameraPosition = {
-        lng: targetPosition.lng + lngDiff,
-        lat: targetPosition.lat - latDiff
-      };
-      if (smooth && _previousCameraPosition) {
-        const SMOOTH_FACTOR = 0.95;
-        newCameraPosition.lng = lerp(newCameraPosition.lng, _previousCameraPosition.lng, SMOOTH_FACTOR);
-        newCameraPosition.lat = lerp(newCameraPosition.lat, _previousCameraPosition.lat, SMOOTH_FACTOR);
+      function lerp(start, end, amt) {
+        return (1 - amt) * start + amt * end;
       }
-      _previousCameraPosition = newCameraPosition;
-      return newCameraPosition;
-    }
 
-    function toggleAnimationControls() {
-      const toggle = document.getElementById('animationToggle');
-      const panel = document.getElementById('animationControls');
-      toggle.classList.toggle('expanded');
-      panel.classList.toggle('expanded');
-    }
+      let _previousCameraPosition = null;
 
-    function updateAnimationFrame(map, path, pathDistance, animationPhase, opts) {
-      const { startBearing, startAltitude, pitch, lineGradient, cameraFollow, bearingChange } = opts;
-      if (lineGradient) {
-        map.setPaintProperty('route', 'line-gradient', [
-          'step', ['line-progress'], '#3b9dd2', animationPhase, 'rgba(0,0,0,0)'
-        ]);
+      function computeCameraPosition(
+        pitch,
+        bearing,
+        targetPosition,
+        altitude,
+        smooth = false,
+      ) {
+        const bearingInRadian = bearing / 57.29;
+        const pitchInRadian = (90 - pitch) / 57.29;
+        const lngDiff =
+          ((altitude / Math.tan(pitchInRadian)) * Math.sin(-bearingInRadian)) /
+          70000;
+        const latDiff =
+          ((altitude / Math.tan(pitchInRadian)) * Math.cos(-bearingInRadian)) /
+          110000;
+        const newCameraPosition = {
+          lng: targetPosition.lng + lngDiff,
+          lat: targetPosition.lat - latDiff,
+        };
+        if (smooth && _previousCameraPosition) {
+          const SMOOTH_FACTOR = 0.95;
+          newCameraPosition.lng = lerp(
+            newCameraPosition.lng,
+            _previousCameraPosition.lng,
+            SMOOTH_FACTOR,
+          );
+          newCameraPosition.lat = lerp(
+            newCameraPosition.lat,
+            _previousCameraPosition.lat,
+            SMOOTH_FACTOR,
+          );
+        }
+        _previousCameraPosition = newCameraPosition;
+        return newCameraPosition;
       }
-      if (cameraFollow) {
-        const [lng, lat] = turf.along(path, pathDistance * animationPhase).geometry.coordinates;
-        const lngLat = { lng, lat };
-        const bearing = bearingChange ? startBearing - animationPhase * 200 : startBearing;
-        const correctedPosition = computeCameraPosition(pitch, bearing, lngLat, startAltitude, true);
-        const camera = map.getFreeCameraOptions();
-        camera.setPitchBearing(pitch, bearing);
-        camera.position = mapboxgl.MercatorCoordinate.fromLngLat(correctedPosition, startAltitude);
-        map.setFreeCameraOptions(camera);
+
+      function toggleAnimationControls() {
+        const toggle = document.getElementById("animationToggle");
+        const panel = document.getElementById("animationControls");
+        toggle.classList.toggle("expanded");
+        panel.classList.toggle("expanded");
       }
-    }
 
-    function animatePath({ map, path, duration, startBearing, startAltitude, pitch, lineGradient, cameraFollow, bearingChange, exportMode = false, onProgress, onRender }) {
-      _previousCameraPosition = null;
-      const pathDistance = turf.length(path);
-      const opts = { startBearing, startAltitude, pitch, lineGradient, cameraFollow, bearingChange };
+      function updateAnimationFrame(
+        map,
+        path,
+        pathDistance,
+        animationPhase,
+        opts,
+      ) {
+        const {
+          startBearing,
+          startAltitude,
+          pitch,
+          lineGradient,
+          cameraFollow,
+          bearingChange,
+        } = opts;
+        if (lineGradient) {
+          map.setPaintProperty("route", "line-gradient", [
+            "step",
+            ["line-progress"],
+            "#3b9dd2",
+            animationPhase,
+            "rgba(0,0,0,0)",
+          ]);
+        }
+        if (cameraFollow) {
+          const [lng, lat] = turf.along(path, pathDistance * animationPhase)
+            .geometry.coordinates;
+          const lngLat = { lng, lat };
+          const bearing = bearingChange
+            ? startBearing - animationPhase * 200
+            : startBearing;
+          const correctedPosition = computeCameraPosition(
+            pitch,
+            bearing,
+            lngLat,
+            startAltitude,
+            true,
+          );
+          const camera = map.getFreeCameraOptions();
+          camera.setPitchBearing(pitch, bearing);
+          camera.position = mapboxgl.MercatorCoordinate.fromLngLat(
+            correctedPosition,
+            startAltitude,
+          );
+          map.setFreeCameraOptions(camera);
+        }
+      }
 
-      if (exportMode) {
+      function animatePath({
+        map,
+        path,
+        duration,
+        startBearing,
+        startAltitude,
+        pitch,
+        lineGradient,
+        cameraFollow,
+        bearingChange,
+        exportMode = false,
+        onProgress,
+        onRender,
+      }) {
+        _previousCameraPosition = null;
+        const pathDistance = turf.length(path);
+        const opts = {
+          startBearing,
+          startAltitude,
+          pitch,
+          lineGradient,
+          cameraFollow,
+          bearingChange,
+        };
+
+        if (exportMode) {
+          return new Promise((resolve) => {
+            let now =
+              typeof performance !== "undefined" ? performance.now() : 0;
+            const startTime = now;
+            if (typeof mapboxgl.setNow === "function") mapboxgl.setNow(now);
+
+            const captureFrame = () => {
+              const animationPhase = (now - startTime) / duration;
+              if (onProgress) onProgress(animationPhase);
+
+              if (onRender) onRender();
+
+              if (animationPhase > 1) {
+                map.off("render", captureFrame);
+                if (typeof mapboxgl.restoreNow === "function")
+                  mapboxgl.restoreNow();
+                resolve();
+                return;
+              }
+
+              now += 1000 / 60;
+              if (typeof mapboxgl.setNow === "function") mapboxgl.setNow(now);
+              updateAnimationFrame(
+                map,
+                path,
+                pathDistance,
+                Math.min(animationPhase, 1),
+                opts,
+              );
+            };
+
+            map.on("render", captureFrame);
+            updateAnimationFrame(map, path, pathDistance, 0, opts);
+            map.triggerRepaint();
+          });
+        }
+
         return new Promise((resolve) => {
-          let now = typeof performance !== 'undefined' ? performance.now() : 0;
-          const startTime = now;
-          if (typeof mapboxgl.setNow === 'function') mapboxgl.setNow(now);
-
-          const captureFrame = () => {
-            const animationPhase = (now - startTime) / duration;
-            if (onProgress) onProgress(animationPhase);
-
-            if (onRender) onRender();
+          let startTime;
+          const frame = (currentTime) => {
+            if (!startTime) startTime = currentTime;
+            const animationPhase = (currentTime - startTime) / duration;
 
             if (animationPhase > 1) {
-              map.off('render', captureFrame);
-              if (typeof mapboxgl.restoreNow === 'function') mapboxgl.restoreNow();
               resolve();
               return;
             }
 
-            now += 1000 / 60;
-            if (typeof mapboxgl.setNow === 'function') mapboxgl.setNow(now);
-            updateAnimationFrame(map, path, pathDistance, Math.min(animationPhase, 1), opts);
+            updateAnimationFrame(map, path, pathDistance, animationPhase, opts);
+            requestAnimationFrame(frame);
           };
 
-          map.on('render', captureFrame);
-          updateAnimationFrame(map, path, pathDistance, 0, opts);
-          map.triggerRepaint();
+          requestAnimationFrame(frame);
         });
       }
 
-      return new Promise((resolve) => {
-        let startTime;
-        const frame = (currentTime) => {
-          if (!startTime) startTime = currentTime;
-          const animationPhase = (currentTime - startTime) / duration;
+      async function getRoute() {
+        const errorEl = document.getElementById("error");
+        errorEl.textContent = "";
 
-          if (animationPhase > 1) {
-            resolve();
+        const query = document.getElementById("route").value.trim();
+        const parts = query.split(/\s+to\s+/i);
+        if (parts.length < 2) {
+          errorEl.textContent = 'Use format: "Place A to Place B"';
+          return;
+        }
+
+        const [startQuery, endQuery] = parts
+          .map((s) => s.trim())
+          .filter(Boolean);
+        if (!startQuery || !endQuery) {
+          errorEl.textContent = "Enter both start and end places.";
+          return;
+        }
+
+        try {
+          const geocode = (q) =>
+            fetch(
+              `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?access_token=${mapboxgl.accessToken}`,
+            ).then((r) => r.json());
+
+          const [startRes, endRes] = await Promise.all([
+            geocode(startQuery),
+            geocode(endQuery),
+          ]);
+
+          const start = startRes.features?.[0]?.center;
+          const end = endRes.features?.[0]?.center;
+
+          if (!start) {
+            errorEl.textContent = `Could not find: "${startQuery}"`;
+            return;
+          }
+          if (!end) {
+            errorEl.textContent = `Could not find: "${endQuery}"`;
             return;
           }
 
-          updateAnimationFrame(map, path, pathDistance, animationPhase, opts);
-          requestAnimationFrame(frame);
-        };
+          const coords = `${start[0]},${start[1]};${end[0]},${end[1]}`;
+          const dirRes = await fetch(
+            `https://api.mapbox.com/directions/v5/mapbox/driving/${coords}?geometries=geojson&access_token=${mapboxgl.accessToken}`,
+          ).then((r) => r.json());
 
-        requestAnimationFrame(frame);
-      });
-    }
+          if (!dirRes.routes?.length) {
+            errorEl.textContent = "No route found between these places.";
+            return;
+          }
 
-    async function getRoute() {
-      const errorEl = document.getElementById('error');
-      errorEl.textContent = '';
+          const route = dirRes.routes[0].geometry.coordinates;
 
-      const query = document.getElementById('route').value.trim();
-      const parts = query.split(/\s+to\s+/i);
-      if (parts.length < 2) {
-        errorEl.textContent = 'Use format: "Place A to Place B"';
-        return;
-      }
+          if (map.getLayer("route")) map.removeLayer("route");
+          if (map.getSource("route")) map.removeSource("route");
+          currentRoute = null;
+          document.getElementById("animateBtn").disabled = true;
+          document.getElementById("exportBtn").disabled = true;
 
-      const [startQuery, endQuery] = parts.map(s => s.trim()).filter(Boolean);
-      if (!startQuery || !endQuery) {
-        errorEl.textContent = 'Enter both start and end places.';
-        return;
-      }
+          map.addSource("route", {
+            type: "geojson",
+            data: {
+              type: "Feature",
+              geometry: { type: "LineString", coordinates: route },
+            },
+            lineMetrics: true,
+          });
+          map.addLayer({
+            id: "route",
+            type: "line",
+            source: "route",
+            paint: {
+              "line-gradient": [
+                "step",
+                ["line-progress"],
+                "#3b9dd2",
+                1,
+                "rgba(0,0,0,0)",
+              ],
+              "line-width": 6,
+            },
+            layout: { "line-cap": "round", "line-join": "round" },
+          });
 
-      try {
-        const geocode = (q) =>
-          fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?access_token=${mapboxgl.accessToken}`)
-            .then(r => r.json());
+          currentRoute = {
+            type: "Feature",
+            geometry: { type: "LineString", coordinates: route },
+          };
+          document.getElementById("animateBtn").disabled = false;
+          document.getElementById("exportBtn").disabled = false;
 
-        const [startRes, endRes] = await Promise.all([geocode(startQuery), geocode(endQuery)]);
-
-        const start = startRes.features?.[0]?.center;
-        const end = endRes.features?.[0]?.center;
-
-        if (!start) {
-          errorEl.textContent = `Could not find: "${startQuery}"`;
-          return;
+          const bounds = new mapboxgl.LngLatBounds();
+          route.forEach((c) => bounds.extend(c));
+          map.fitBounds(bounds, { padding: 50, pitch: 50, bearing: 0 });
+        } catch (err) {
+          errorEl.textContent =
+            "Error: " + (err.message || "Something went wrong");
         }
-        if (!end) {
-          errorEl.textContent = `Could not find: "${endQuery}"`;
-          return;
+      }
+
+      async function animateRoute() {
+        if (!currentRoute) return;
+        const btn = document.getElementById("animateBtn");
+        btn.disabled = true;
+        try {
+          await animatePath({
+            map,
+            path: currentRoute,
+            duration: Number(document.getElementById("duration").value) || 2000,
+            startBearing:
+              Number(document.getElementById("startBearing").value) || 0,
+            startAltitude:
+              Number(document.getElementById("startAltitude").value) || 420000,
+            pitch: Number(document.getElementById("pitch").value) || 50,
+            lineGradient: document.getElementById("lineGradient").checked,
+            cameraFollow: document.getElementById("cameraFollow").checked,
+            bearingChange: document.getElementById("bearingChange").checked,
+          });
+        } finally {
+          btn.disabled = false;
         }
+      }
 
-        const coords = `${start[0]},${start[1]};${end[0]},${end[1]}`;
-        const dirRes = await fetch(
-          `https://api.mapbox.com/directions/v5/mapbox/driving/${coords}?geometries=geojson&access_token=${mapboxgl.accessToken}`
-        ).then(r => r.json());
+      async function exportVideo() {
+        if (!currentRoute) return;
+        const exportBtn = document.getElementById("exportBtn");
+        const statusEl = document.getElementById("exportStatus");
+        const mapEl = document.getElementById("map");
+        const savedWidth = mapEl.style.width;
+        const savedHeight = mapEl.style.height;
 
-        if (!dirRes.routes?.length) {
-          errorEl.textContent = 'No route found between these places.';
-          return;
+        exportBtn.disabled = true;
+        statusEl.textContent = "Loading encoder...";
+
+        try {
+          const [encoderModule, simdModule] = await Promise.all([
+            import("https://unpkg.com/mp4-h264@1.0.7/build/mp4-encoder.js"),
+            import("https://unpkg.com/wasm-feature-detect?module"),
+          ]);
+          const loadEncoder = encoderModule.default;
+          const supportsSIMD = await simdModule.simd();
+          const Encoder = await loadEncoder({ simd: supportsSIMD });
+
+          const sizeStr = document.getElementById("exportSize").value;
+          const [width, height] = sizeStr.split("x").map(Number);
+
+          mapEl.style.width = width + "px";
+          mapEl.style.height = height + "px";
+          map.resize();
+
+          await map.once("idle");
+
+          const gl = map.painter.context.gl;
+          const glWidth = gl.drawingBufferWidth;
+          const glHeight = gl.drawingBufferHeight;
+
+          const encoder = Encoder.create({
+            width: glWidth,
+            height: glHeight,
+            fps: 60,
+            kbps: 64000,
+            rgbFlipY: true,
+          });
+
+          const ptr = encoder.getRGBPointer();
+          const pixels = encoder.memory().subarray(ptr);
+
+          const captureFrame = () => {
+            gl.readPixels(
+              0,
+              0,
+              glWidth,
+              glHeight,
+              gl.RGBA,
+              gl.UNSIGNED_BYTE,
+              pixels,
+            );
+            encoder.encodeRGBPointer();
+          };
+
+          statusEl.textContent = "Exporting...";
+
+          const duration =
+            Number(document.getElementById("duration").value) || 20000;
+          await animatePath({
+            map,
+            path: currentRoute,
+            duration,
+            startBearing:
+              Number(document.getElementById("startBearing").value) || 0,
+            startAltitude:
+              Number(document.getElementById("startAltitude").value) || 12000,
+            pitch: Number(document.getElementById("pitch").value) || 50,
+            lineGradient: document.getElementById("lineGradient").checked,
+            cameraFollow: document.getElementById("cameraFollow").checked,
+            bearingChange: document.getElementById("bearingChange").checked,
+            exportMode: true,
+            onProgress: (p) => {
+              statusEl.textContent =
+                "Exporting... " + Math.round(p * 100) + "%";
+            },
+            onRender: captureFrame,
+          });
+          const mp4 = encoder.end();
+
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(new Blob([mp4], { type: "video/mp4" }));
+          a.download = "route-animation.mp4";
+          a.click();
+          URL.revokeObjectURL(a.href);
+
+          statusEl.textContent =
+            "Done. Run ffmpeg -i route-animation.mp4 out.mp4 to compress.";
+        } catch (err) {
+          statusEl.textContent = "Error: " + (err.message || "Export failed");
+        } finally {
+          mapEl.style.width = savedWidth;
+          mapEl.style.height = savedHeight;
+          map.resize();
+          exportBtn.disabled = false;
         }
-
-        const route = dirRes.routes[0].geometry.coordinates;
-
-        if (map.getLayer('route')) map.removeLayer('route');
-        if (map.getSource('route')) map.removeSource('route');
-        currentRoute = null;
-        document.getElementById('animateBtn').disabled = true;
-        document.getElementById('exportBtn').disabled = true;
-
-        map.addSource('route', {
-          type: 'geojson',
-          data: { type: 'Feature', geometry: { type: 'LineString', coordinates: route } },
-          lineMetrics: true
-        });
-        map.addLayer({
-          id: 'route',
-          type: 'line',
-          source: 'route',
-          paint: {
-            'line-gradient': ['step', ['line-progress'], '#3b9dd2', 1, 'rgba(0,0,0,0)'],
-            'line-width': 6
-          },
-          layout: { 'line-cap': 'round', 'line-join': 'round' }
-        });
-
-        currentRoute = { type: 'Feature', geometry: { type: 'LineString', coordinates: route } };
-        document.getElementById('animateBtn').disabled = false;
-        document.getElementById('exportBtn').disabled = false;
-
-        const bounds = new mapboxgl.LngLatBounds();
-        route.forEach(c => bounds.extend(c));
-        map.fitBounds(bounds, { padding: 50, pitch: 50, bearing: 0 });
-      } catch (err) {
-        errorEl.textContent = 'Error: ' + (err.message || 'Something went wrong');
       }
-    }
-
-    async function animateRoute() {
-      if (!currentRoute) return;
-      const btn = document.getElementById('animateBtn');
-      btn.disabled = true;
-      try {
-        await animatePath({
-          map,
-          path: currentRoute,
-          duration: Number(document.getElementById('duration').value) || 20000,
-          startBearing: Number(document.getElementById('startBearing').value) || 0,
-          startAltitude: Number(document.getElementById('startAltitude').value) || 12000,
-          pitch: Number(document.getElementById('pitch').value) || 50,
-          lineGradient: document.getElementById('lineGradient').checked,
-          cameraFollow: document.getElementById('cameraFollow').checked,
-          bearingChange: document.getElementById('bearingChange').checked
-        });
-      } finally {
-        btn.disabled = false;
-      }
-    }
-
-    async function exportVideo() {
-      if (!currentRoute) return;
-      const exportBtn = document.getElementById('exportBtn');
-      const statusEl = document.getElementById('exportStatus');
-      const mapEl = document.getElementById('map');
-      const savedWidth = mapEl.style.width;
-      const savedHeight = mapEl.style.height;
-
-      exportBtn.disabled = true;
-      statusEl.textContent = 'Loading encoder...';
-
-      try {
-        const [encoderModule, simdModule] = await Promise.all([
-          import('https://unpkg.com/mp4-h264@1.0.7/build/mp4-encoder.js'),
-          import('https://unpkg.com/wasm-feature-detect?module')
-        ]);
-        const loadEncoder = encoderModule.default;
-        const supportsSIMD = await simdModule.simd();
-        const Encoder = await loadEncoder({ simd: supportsSIMD });
-
-        const sizeStr = document.getElementById('exportSize').value;
-        const [width, height] = sizeStr.split('x').map(Number);
-
-        mapEl.style.width = width + 'px';
-        mapEl.style.height = height + 'px';
-        map.resize();
-
-        await map.once('idle');
-
-        const gl = map.painter.context.gl;
-        const glWidth = gl.drawingBufferWidth;
-        const glHeight = gl.drawingBufferHeight;
-
-        const encoder = Encoder.create({
-          width: glWidth,
-          height: glHeight,
-          fps: 60,
-          kbps: 64000,
-          rgbFlipY: true
-        });
-
-        const ptr = encoder.getRGBPointer();
-        const pixels = encoder.memory().subarray(ptr);
-
-        const captureFrame = () => {
-          gl.readPixels(0, 0, glWidth, glHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-          encoder.encodeRGBPointer();
-        };
-
-        statusEl.textContent = 'Exporting...';
-
-        const duration = Number(document.getElementById('duration').value) || 20000;
-        await animatePath({
-          map,
-          path: currentRoute,
-          duration,
-          startBearing: Number(document.getElementById('startBearing').value) || 0,
-          startAltitude: Number(document.getElementById('startAltitude').value) || 12000,
-          pitch: Number(document.getElementById('pitch').value) || 50,
-          lineGradient: document.getElementById('lineGradient').checked,
-          cameraFollow: document.getElementById('cameraFollow').checked,
-          bearingChange: document.getElementById('bearingChange').checked,
-          exportMode: true,
-          onProgress: (p) => { statusEl.textContent = 'Exporting... ' + Math.round(p * 100) + '%'; },
-          onRender: captureFrame
-        });
-        const mp4 = encoder.end();
-
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(new Blob([mp4], { type: 'video/mp4' }));
-        a.download = 'route-animation.mp4';
-        a.click();
-        URL.revokeObjectURL(a.href);
-
-        statusEl.textContent = 'Done. Run ffmpeg -i route-animation.mp4 out.mp4 to compress.';
-      } catch (err) {
-        statusEl.textContent = 'Error: ' + (err.message || 'Export failed');
-      } finally {
-        mapEl.style.width = savedWidth;
-        mapEl.style.height = savedHeight;
-        map.resize();
-        exportBtn.disabled = false;
-      }
-    }
-  </script>
-</body>
+    </script>
+  </body>
 </html>
