@@ -363,6 +363,7 @@
                 Math.min(animationPhase, 1),
                 opts,
               );
+              map.triggerRepaint();
             };
 
             map.on("render", captureFrame);
