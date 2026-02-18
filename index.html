@@ -237,8 +237,8 @@
             updateAnimationFrame(map, path, pathDistance, Math.min(animationPhase, 1), opts);
           };
 
+          map.on('render', captureFrame);
           updateAnimationFrame(map, path, pathDistance, 0, opts);
-          map.once('render', () => map.on('render', captureFrame));
           map.triggerRepaint();
         });
       }
