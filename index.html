@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Route Finder</title>
-  <script src="https://api.mapbox.com/mapbox-gl-js/v3.11.0/mapbox-gl.js"></script>
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.11.0/mapbox-gl-dev.js"></script>
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.11.0/mapbox-gl.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7/turf.min.js"></script>
   <style>
@@ -64,7 +64,12 @@
       transition: max-height 0.2s ease-out;
     }
     #animationControls.expanded {
-      max-height: 320px;
+      max-height: 360px;
+    }
+    #exportStatus {
+      font-size: 12px;
+      color: #666;
+      margin-top: 4px;
     }
     .control-row {
       display: flex;
@@ -85,6 +90,10 @@
       flex: 1;
       cursor: pointer;
     }
+    .control-row select {
+      padding: 6px 8px;
+      font-size: 13px;
+    }
   </style>
 </head>
 <body>
@@ -93,6 +102,7 @@
     <br>
     <button onclick="getRoute()">Draw Route</button>
     <button id="animateBtn" onclick="animateRoute()" disabled>Animate Route</button>
+    <button id="exportBtn" onclick="exportVideo()" disabled>Export video</button>
     <div class="control-toggle" id="animationToggle" onclick="toggleAnimationControls()">Animation controls</div>
     <div id="animationControls">
       <div class="control-row">
@@ -123,8 +133,16 @@
         <label for="pitch">Pitch (°)</label>
         <input type="number" id="pitch" value="50" min="0" max="85">
       </div>
+      <div class="control-row">
+        <label for="exportSize">Export size</label>
+        <select id="exportSize" style="width: 80px; margin: 0 0 0 auto; padding: 6px;">
+          <option value="1280x720">16:9</option>
+          <option value="1080x1080">1:1</option>
+        </select>
+      </div>
     </div>
     <div id="error"></div>
+    <div id="exportStatus"></div>
   </div>
   <div id="map"></div>
 
@@ -171,12 +189,62 @@
       panel.classList.toggle('expanded');
     }
 
-    function animatePath({ map, path, duration, startBearing, startAltitude, pitch, lineGradient, cameraFollow, bearingChange }) {
-      _previousCameraPosition = null;
-      return new Promise((resolve) => {
-        const pathDistance = turf.length(path);
-        let startTime;
+    function updateAnimationFrame(map, path, pathDistance, animationPhase, opts) {
+      const { startBearing, startAltitude, pitch, lineGradient, cameraFollow, bearingChange } = opts;
+      if (lineGradient) {
+        map.setPaintProperty('route', 'line-gradient', [
+          'step', ['line-progress'], '#3b9dd2', animationPhase, 'rgba(0,0,0,0)'
+        ]);
+      }
+      if (cameraFollow) {
+        const [lng, lat] = turf.along(path, pathDistance * animationPhase).geometry.coordinates;
+        const lngLat = { lng, lat };
+        const bearing = bearingChange ? startBearing - animationPhase * 200 : startBearing;
+        const correctedPosition = computeCameraPosition(pitch, bearing, lngLat, startAltitude, true);
+        const camera = map.getFreeCameraOptions();
+        camera.setPitchBearing(pitch, bearing);
+        camera.position = mapboxgl.MercatorCoordinate.fromLngLat(correctedPosition, startAltitude);
+        map.setFreeCameraOptions(camera);
+      }
+    }
 
+    function animatePath({ map, path, duration, startBearing, startAltitude, pitch, lineGradient, cameraFollow, bearingChange, exportMode = false, onProgress, onRender }) {
+      _previousCameraPosition = null;
+      const pathDistance = turf.length(path);
+      const opts = { startBearing, startAltitude, pitch, lineGradient, cameraFollow, bearingChange };
+
+      if (exportMode) {
+        return new Promise((resolve) => {
+          let now = typeof performance !== 'undefined' ? performance.now() : 0;
+          const startTime = now;
+          if (typeof mapboxgl.setNow === 'function') mapboxgl.setNow(now);
+
+          const captureFrame = () => {
+            const animationPhase = (now - startTime) / duration;
+            if (onProgress) onProgress(animationPhase);
+
+            if (onRender) onRender();
+
+            if (animationPhase > 1) {
+              map.off('render', captureFrame);
+              if (typeof mapboxgl.restoreNow === 'function') mapboxgl.restoreNow();
+              resolve();
+              return;
+            }
+
+            now += 1000 / 60;
+            if (typeof mapboxgl.setNow === 'function') mapboxgl.setNow(now);
+            updateAnimationFrame(map, path, pathDistance, Math.min(animationPhase, 1), opts);
+          };
+
+          updateAnimationFrame(map, path, pathDistance, 0, opts);
+          map.once('render', () => map.on('render', captureFrame));
+          map.triggerRepaint();
+        });
+      }
+
+      return new Promise((resolve) => {
+        let startTime;
         const frame = (currentTime) => {
           if (!startTime) startTime = currentTime;
           const animationPhase = (currentTime - startTime) / duration;
@@ -186,24 +254,7 @@
             return;
           }
 
-          if (lineGradient) {
-            map.setPaintProperty('route', 'line-gradient', [
-              'step', ['line-progress'], '#3b9dd2', animationPhase, 'rgba(0,0,0,0)'
-            ]);
-          }
-
-          if (cameraFollow) {
-            const [lng, lat] = turf.along(path, pathDistance * animationPhase).geometry.coordinates;
-            const lngLat = { lng, lat };
-            const bearing = bearingChange ? startBearing - animationPhase * 200 : startBearing;
-            const correctedPosition = computeCameraPosition(pitch, bearing, lngLat, startAltitude, true);
-
-            const camera = map.getFreeCameraOptions();
-            camera.setPitchBearing(pitch, bearing);
-            camera.position = mapboxgl.MercatorCoordinate.fromLngLat(correctedPosition, startAltitude);
-            map.setFreeCameraOptions(camera);
-          }
-
+          updateAnimationFrame(map, path, pathDistance, animationPhase, opts);
           requestAnimationFrame(frame);
         };
 
@@ -263,6 +314,7 @@
         if (map.getSource('route')) map.removeSource('route');
         currentRoute = null;
         document.getElementById('animateBtn').disabled = true;
+        document.getElementById('exportBtn').disabled = true;
 
         map.addSource('route', {
           type: 'geojson',
@@ -282,6 +334,7 @@
 
         currentRoute = { type: 'Feature', geometry: { type: 'LineString', coordinates: route } };
         document.getElementById('animateBtn').disabled = false;
+        document.getElementById('exportBtn').disabled = false;
 
         const bounds = new mapboxgl.LngLatBounds();
         route.forEach(c => bounds.extend(c));
@@ -309,6 +362,91 @@
         });
       } finally {
         btn.disabled = false;
+      }
+    }
+
+    async function exportVideo() {
+      if (!currentRoute) return;
+      const exportBtn = document.getElementById('exportBtn');
+      const statusEl = document.getElementById('exportStatus');
+      const mapEl = document.getElementById('map');
+      const savedWidth = mapEl.style.width;
+      const savedHeight = mapEl.style.height;
+
+      exportBtn.disabled = true;
+      statusEl.textContent = 'Loading encoder...';
+
+      try {
+        const [encoderModule, simdModule] = await Promise.all([
+          import('https://unpkg.com/mp4-h264@1.0.7/build/mp4-encoder.js'),
+          import('https://unpkg.com/wasm-feature-detect?module')
+        ]);
+        const loadEncoder = encoderModule.default;
+        const supportsSIMD = await simdModule.simd();
+        const Encoder = await loadEncoder({ simd: supportsSIMD });
+
+        const sizeStr = document.getElementById('exportSize').value;
+        const [width, height] = sizeStr.split('x').map(Number);
+
+        mapEl.style.width = width + 'px';
+        mapEl.style.height = height + 'px';
+        map.resize();
+
+        await map.once('idle');
+
+        const gl = map.painter.context.gl;
+        const glWidth = gl.drawingBufferWidth;
+        const glHeight = gl.drawingBufferHeight;
+
+        const encoder = Encoder.create({
+          width: glWidth,
+          height: glHeight,
+          fps: 60,
+          kbps: 64000,
+          rgbFlipY: true
+        });
+
+        const ptr = encoder.getRGBPointer();
+        const pixels = encoder.memory().subarray(ptr);
+
+        const captureFrame = () => {
+          gl.readPixels(0, 0, glWidth, glHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+          encoder.encodeRGBPointer();
+        };
+
+        statusEl.textContent = 'Exporting...';
+
+        const duration = Number(document.getElementById('duration').value) || 20000;
+        await animatePath({
+          map,
+          path: currentRoute,
+          duration,
+          startBearing: Number(document.getElementById('startBearing').value) || 0,
+          startAltitude: Number(document.getElementById('startAltitude').value) || 12000,
+          pitch: Number(document.getElementById('pitch').value) || 50,
+          lineGradient: document.getElementById('lineGradient').checked,
+          cameraFollow: document.getElementById('cameraFollow').checked,
+          bearingChange: document.getElementById('bearingChange').checked,
+          exportMode: true,
+          onProgress: (p) => { statusEl.textContent = 'Exporting... ' + Math.round(p * 100) + '%'; },
+          onRender: captureFrame
+        });
+        const mp4 = encoder.end();
+
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([mp4], { type: 'video/mp4' }));
+        a.download = 'route-animation.mp4';
+        a.click();
+        URL.revokeObjectURL(a.href);
+
+        statusEl.textContent = 'Done. Run ffmpeg -i route-animation.mp4 out.mp4 to compress.';
+      } catch (err) {
+        statusEl.textContent = 'Error: ' + (err.message || 'Export failed');
+      } finally {
+        mapEl.style.width = savedWidth;
+        mapEl.style.height = savedHeight;
+        map.resize();
+        exportBtn.disabled = false;
       }
     }
   </script>
