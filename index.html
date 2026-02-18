@@ -11,6 +11,28 @@
     />
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7/turf.min.js"></script>
     <style>
+      :root {
+        --panel-bg: #fff;
+        --panel-text: #111;
+        --input-bg: #fff;
+        --input-text: #111;
+        --input-border: #ccc;
+        --secondary-text: #666;
+        --error-color: #c00;
+        --btn-bg: #3b9dd2;
+        --btn-hover: #2d8bc0;
+      }
+      body.night-mode {
+        --panel-bg: #1a1a1a;
+        --panel-text: #e0e0e0;
+        --input-bg: #2d2d2d;
+        --input-text: #e0e0e0;
+        --input-border: #444;
+        --secondary-text: #999;
+        --error-color: #e57373;
+        --btn-bg: #4a9fd9;
+        --btn-hover: #3b8fc9;
+      }
       * {
         box-sizing: border-box;
       }
@@ -23,7 +45,8 @@
         top: 10px;
         left: 10px;
         z-index: 1;
-        background: white;
+        background: var(--panel-bg);
+        color: var(--panel-text);
         padding: 12px;
         border-radius: 8px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
@@ -38,24 +61,28 @@
         margin: 4px 0;
         width: 260px;
         font-size: 14px;
+        background: var(--input-bg);
+        color: var(--input-text);
+        border: 1px solid var(--input-border);
+        border-radius: 6px;
       }
       button {
         cursor: pointer;
-        background: #3b9dd2;
+        background: var(--btn-bg);
         color: white;
         border: none;
         border-radius: 6px;
         font-weight: 500;
       }
       button:hover {
-        background: #2d8bc0;
+        background: var(--btn-hover);
       }
       button:disabled {
         opacity: 0.5;
         cursor: not-allowed;
       }
       #error {
-        color: #c00;
+        color: var(--error-color);
         font-size: 13px;
         margin-top: 6px;
         max-width: 260px;
@@ -66,6 +93,7 @@
         font-weight: 500;
         margin: 8px 0 4px;
         user-select: none;
+        color: var(--panel-text);
       }
       .control-toggle::before {
         content: "▸ ";
@@ -85,7 +113,7 @@
       }
       #exportStatus {
         font-size: 12px;
-        color: #666;
+        color: var(--secondary-text);
         margin-top: 4px;
       }
       .control-row {
@@ -98,6 +126,7 @@
       .control-row input[type="checkbox"] {
         width: auto;
         margin: 0;
+        accent-color: var(--btn-bg);
       }
       .control-row input[type="number"] {
         width: 80px;
@@ -106,10 +135,15 @@
       .control-row label {
         flex: 1;
         cursor: pointer;
+        color: var(--panel-text);
       }
       .control-row select {
         padding: 6px 8px;
         font-size: 13px;
+        background: var(--input-bg);
+        color: var(--input-text);
+        border: 1px solid var(--input-border);
+        border-radius: 6px;
       }
     </style>
   </head>
@@ -213,12 +247,32 @@
         zoom: 4,
       });
 
-      document.getElementById("nightMode").addEventListener("change", (e) => {
-        map.setConfigProperty(
-          "basemap",
-          "lightPreset",
-          e.target.checked ? "night" : "day",
-        );
+      const nightModeCheckbox = document.getElementById("nightMode");
+
+      function applyNightMode(checked) {
+        document.body.classList.toggle("night-mode", checked);
+        const setMapPreset = () =>
+          map.setConfigProperty(
+            "basemap",
+            "lightPreset",
+            checked ? "night" : "day",
+          );
+        if (map.isStyleLoaded()) {
+          setMapPreset();
+        } else {
+          map.once("load", setMapPreset);
+        }
+        try {
+          localStorage.setItem("nightMode", checked ? "1" : "0");
+        } catch (_) {}
+      }
+
+      const savedNightMode = localStorage.getItem("nightMode") === "1";
+      nightModeCheckbox.checked = savedNightMode;
+      applyNightMode(savedNightMode);
+
+      nightModeCheckbox.addEventListener("change", (e) => {
+        applyNightMode(e.target.checked);
       });
 
       let currentRoute = null;
