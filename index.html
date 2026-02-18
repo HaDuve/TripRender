@@ -43,6 +43,48 @@
       margin-top: 6px;
       max-width: 260px;
     }
+    .control-toggle {
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      margin: 8px 0 4px;
+      user-select: none;
+    }
+    .control-toggle::before {
+      content: '▸ ';
+      display: inline-block;
+      transition: transform 0.2s;
+    }
+    .control-toggle.expanded::before {
+      transform: rotate(90deg);
+    }
+    #animationControls {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.2s ease-out;
+    }
+    #animationControls.expanded {
+      max-height: 320px;
+    }
+    .control-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 6px 0;
+      font-size: 13px;
+    }
+    .control-row input[type="checkbox"] {
+      width: auto;
+      margin: 0;
+    }
+    .control-row input[type="number"] {
+      width: 80px;
+      margin: 0 0 0 auto;
+    }
+    .control-row label {
+      flex: 1;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -51,6 +93,37 @@
     <br>
     <button onclick="getRoute()">Draw Route</button>
     <button id="animateBtn" onclick="animateRoute()" disabled>Animate Route</button>
+    <div class="control-toggle" id="animationToggle" onclick="toggleAnimationControls()">Animation controls</div>
+    <div id="animationControls">
+      <div class="control-row">
+        <input type="checkbox" id="lineGradient" checked>
+        <label for="lineGradient">Line gradient</label>
+      </div>
+      <div class="control-row">
+        <input type="checkbox" id="cameraFollow" checked>
+        <label for="cameraFollow">Camera follow</label>
+      </div>
+      <div class="control-row">
+        <input type="checkbox" id="bearingChange" checked>
+        <label for="bearingChange">Bearing change</label>
+      </div>
+      <div class="control-row">
+        <label for="duration">Duration (ms)</label>
+        <input type="number" id="duration" value="20000" min="1000" step="1000">
+      </div>
+      <div class="control-row">
+        <label for="startBearing">Bearing (°)</label>
+        <input type="number" id="startBearing" value="0" min="-180" max="180">
+      </div>
+      <div class="control-row">
+        <label for="startAltitude">Altitude (m)</label>
+        <input type="number" id="startAltitude" value="12000" min="100" step="100">
+      </div>
+      <div class="control-row">
+        <label for="pitch">Pitch (°)</label>
+        <input type="number" id="pitch" value="50" min="0" max="85">
+      </div>
+    </div>
     <div id="error"></div>
   </div>
   <div id="map"></div>
@@ -91,7 +164,14 @@
       return newCameraPosition;
     }
 
-    function animatePath({ map, path, duration, startBearing, startAltitude, pitch }) {
+    function toggleAnimationControls() {
+      const toggle = document.getElementById('animationToggle');
+      const panel = document.getElementById('animationControls');
+      toggle.classList.toggle('expanded');
+      panel.classList.toggle('expanded');
+    }
+
+    function animatePath({ map, path, duration, startBearing, startAltitude, pitch, lineGradient, cameraFollow, bearingChange }) {
       _previousCameraPosition = null;
       return new Promise((resolve) => {
         const pathDistance = turf.length(path);
@@ -106,19 +186,23 @@
             return;
           }
 
-          map.setPaintProperty('route', 'line-gradient', [
-            'step', ['line-progress'], '#3b9dd2', animationPhase, 'rgba(0,0,0,0)'
-          ]);
+          if (lineGradient) {
+            map.setPaintProperty('route', 'line-gradient', [
+              'step', ['line-progress'], '#3b9dd2', animationPhase, 'rgba(0,0,0,0)'
+            ]);
+          }
 
-          const [lng, lat] = turf.along(path, pathDistance * animationPhase).geometry.coordinates;
-          const lngLat = { lng, lat };
-          const bearing = startBearing - animationPhase * 200;
-          const correctedPosition = computeCameraPosition(pitch, bearing, lngLat, startAltitude, true);
+          if (cameraFollow) {
+            const [lng, lat] = turf.along(path, pathDistance * animationPhase).geometry.coordinates;
+            const lngLat = { lng, lat };
+            const bearing = bearingChange ? startBearing - animationPhase * 200 : startBearing;
+            const correctedPosition = computeCameraPosition(pitch, bearing, lngLat, startAltitude, true);
 
-          const camera = map.getFreeCameraOptions();
-          camera.setPitchBearing(pitch, bearing);
-          camera.position = mapboxgl.MercatorCoordinate.fromLngLat(correctedPosition, startAltitude);
-          map.setFreeCameraOptions(camera);
+            const camera = map.getFreeCameraOptions();
+            camera.setPitchBearing(pitch, bearing);
+            camera.position = mapboxgl.MercatorCoordinate.fromLngLat(correctedPosition, startAltitude);
+            map.setFreeCameraOptions(camera);
+          }
 
           requestAnimationFrame(frame);
         };
@@ -215,10 +299,13 @@
         await animatePath({
           map,
           path: currentRoute,
-          duration: 20000,
-          startBearing: 0,
-          startAltitude: 12000,
-          pitch: 50
+          duration: Number(document.getElementById('duration').value) || 20000,
+          startBearing: Number(document.getElementById('startBearing').value) || 0,
+          startAltitude: Number(document.getElementById('startAltitude').value) || 12000,
+          pitch: Number(document.getElementById('pitch').value) || 50,
+          lineGradient: document.getElementById('lineGradient').checked,
+          cameraFollow: document.getElementById('cameraFollow').checked,
+          bearingChange: document.getElementById('bearingChange').checked
         });
       } finally {
         btn.disabled = false;
