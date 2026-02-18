@@ -340,40 +340,45 @@
             const startTime = now;
             if (typeof mapboxgl.setNow === "function") mapboxgl.setNow(now);
 
-            // Capture on each render (like Mapbox video-export: readPixels when map has drawn)
+            // Capture on each render (Mapbox video-export: readPixels when map has drawn)
             const captureFrame = () => {
               const animationPhase = (now - startTime) / duration;
               if (onProgress) onProgress(animationPhase);
               if (onRender) onRender();
             };
 
-            // Drive loop with rAF (Mapbox uses easeTo which drives internally; we must drive manually)
-            const driveFrame = () => {
-              const animationPhase = (now - startTime) / duration;
-              if (animationPhase > 1) {
-                map.off("render", captureFrame);
-                if (typeof mapboxgl.restoreNow === "function")
-                  mapboxgl.restoreNow();
-                resolve();
-                return;
-              }
-              now += 1000 / 60;
-              if (typeof mapboxgl.setNow === "function") mapboxgl.setNow(now);
-              updateAnimationFrame(
-                map,
-                path,
-                pathDistance,
-                Math.min(animationPhase, 1),
-                opts,
-              );
-              map.triggerRepaint();
-              requestAnimationFrame(driveFrame);
+            // Custom layer drives the render loop (like Mapbox easeTo)
+            const driverLayer = {
+              id: "_export-driver",
+              type: "custom",
+              onAdd() {},
+              render(gl, matrix) {
+                now += 1000 / 60;
+                if (typeof mapboxgl.setNow === "function")
+                  mapboxgl.setNow(now);
+                const animationPhase = (now - startTime) / duration;
+                if (animationPhase > 1) {
+                  map.removeLayer("_export-driver");
+                  map.off("render", captureFrame);
+                  if (typeof mapboxgl.restoreNow === "function")
+                    mapboxgl.restoreNow();
+                  resolve();
+                  return;
+                }
+                updateAnimationFrame(
+                  map,
+                  path,
+                  pathDistance,
+                  Math.min(animationPhase, 1),
+                  opts,
+                );
+                map.triggerRepaint();
+              },
             };
 
             map.on("render", captureFrame);
             updateAnimationFrame(map, path, pathDistance, 0, opts);
-            map.triggerRepaint();
-            requestAnimationFrame(driveFrame);
+            map.addLayer(driverLayer);
           });
         }
 
