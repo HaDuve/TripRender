@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Route Finder</title>
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.11.0/mapbox-gl.js"></script>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.11.0/mapbox-gl.css" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    #input {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 1;
+      background: white;
+      padding: 12px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    #map { width: 100vw; height: 100vh; }
+    input, button {
+      padding: 8px 12px;
+      margin: 4px 0;
+      width: 260px;
+      font-size: 14px;
+    }
+    button {
+      cursor: pointer;
+      background: #3b9dd2;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-weight: 500;
+    }
+    button:hover { background: #2d8bc0; }
+    #error {
+      color: #c00;
+      font-size: 13px;
+      margin-top: 6px;
+      max-width: 260px;
+    }
+  </style>
+</head>
+<body>
+  <div id="input">
+    <input id="route" type="text" placeholder="New York, NY to Boston, MA" value="New York, NY to Boston, MA">
+    <br>
+    <button onclick="getRoute()">Draw Route</button>
+    <div id="error"></div>
+  </div>
+  <div id="map"></div>
+
+  <script>
+    mapboxgl.accessToken = '__MAPBOX_TOKEN__';
+
+    const map = new mapboxgl.Map({
+      container: 'map',
+      style: 'mapbox://styles/mapbox/streets-v12',
+      center: [-74.5, 40],
+      zoom: 4
+    });
+
+    async function getRoute() {
+      const errorEl = document.getElementById('error');
+      errorEl.textContent = '';
+
+      const query = document.getElementById('route').value.trim();
+      const parts = query.split(/\s+to\s+/i);
+      if (parts.length < 2) {
+        errorEl.textContent = 'Use format: "Place A to Place B"';
+        return;
+      }
+
+      const [startQuery, endQuery] = parts.map(s => s.trim()).filter(Boolean);
+      if (!startQuery || !endQuery) {
+        errorEl.textContent = 'Enter both start and end places.';
+        return;
+      }
+
+      try {
+        const geocode = (q) =>
+          fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?access_token=${mapboxgl.accessToken}`)
+            .then(r => r.json());
+
+        const [startRes, endRes] = await Promise.all([geocode(startQuery), geocode(endQuery)]);
+
+        const start = startRes.features?.[0]?.center;
+        const end = endRes.features?.[0]?.center;
+
+        if (!start) {
+          errorEl.textContent = `Could not find: "${startQuery}"`;
+          return;
+        }
+        if (!end) {
+          errorEl.textContent = `Could not find: "${endQuery}"`;
+          return;
+        }
+
+        const coords = `${start[0]},${start[1]};${end[0]},${end[1]}`;
+        const dirRes = await fetch(
+          `https://api.mapbox.com/directions/v5/mapbox/driving/${coords}?geometries=geojson&access_token=${mapboxgl.accessToken}`
+        ).then(r => r.json());
+
+        if (!dirRes.routes?.length) {
+          errorEl.textContent = 'No route found between these places.';
+          return;
+        }
+
+        const route = dirRes.routes[0].geometry.coordinates;
+
+        if (map.getLayer('route')) map.removeLayer('route');
+        if (map.getSource('route')) map.removeSource('route');
+
+        map.addSource('route', {
+          type: 'geojson',
+          data: { type: 'Feature', geometry: { type: 'LineString', coordinates: route } }
+        });
+        map.addLayer({
+          id: 'route',
+          type: 'line',
+          source: 'route',
+          paint: { 'line-color': '#3b9dd2', 'line-width': 6 }
+        });
+
+        const bounds = new mapboxgl.LngLatBounds();
+        route.forEach(c => bounds.extend(c));
+        map.fitBounds(bounds, { padding: 50 });
+      } catch (err) {
+        errorEl.textContent = 'Error: ' + (err.message || 'Something went wrong');
+      }
+    }
+  </script>
+</body>
+</html>
