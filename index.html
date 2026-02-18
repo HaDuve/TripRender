@@ -145,17 +145,34 @@
         border: 1px solid var(--input-border);
         border-radius: 6px;
       }
+      #waypoints {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      #waypoints input {
+        width: 260px;
+      }
+      #addStopBtn {
+        margin-top: 6px;
+        background: transparent;
+        color: var(--panel-text);
+        border: 1px solid var(--input-border);
+      }
+      #addStopBtn:hover:not(:disabled) {
+        background: var(--input-bg);
+      }
     </style>
   </head>
   <body>
     <div id="input">
-      <input
-        id="route"
-        type="text"
-        placeholder="New York, NY to Boston, MA"
-        value="New York, NY to Boston, MA"
-      />
-      <br />
+      <div id="waypoints">
+        <input type="text" placeholder="Start" value="New York, NY" />
+        <input type="text" placeholder="End" value="Boston, MA" />
+      </div>
+      <button id="addStopBtn" type="button" onclick="addWaypoint()">
+        Add stop
+      </button>
       <button onclick="getRoute()">Draw Route</button>
       <button id="animateBtn" onclick="animateRoute()" disabled>
         Animate Route
@@ -467,22 +484,36 @@
         });
       }
 
+      const MAX_WAYPOINTS = 24;
+
+      function getWaypointInputs() {
+        return document.querySelectorAll("#waypoints input");
+      }
+
+      function updateAddStopState() {
+        const btn = document.getElementById("addStopBtn");
+        btn.disabled = getWaypointInputs().length >= MAX_WAYPOINTS;
+      }
+
+      function addWaypoint() {
+        if (getWaypointInputs().length >= MAX_WAYPOINTS) return;
+        const input = document.createElement("input");
+        input.type = "text";
+        input.placeholder = "Stop";
+        document.getElementById("waypoints").appendChild(input);
+        updateAddStopState();
+        input.focus();
+      }
+
       async function getRoute() {
         const errorEl = document.getElementById("error");
         errorEl.textContent = "";
 
-        const query = document.getElementById("route").value.trim();
-        const parts = query.split(/\s+to\s+/i);
-        if (parts.length < 2) {
-          errorEl.textContent = 'Use format: "Place A to Place B"';
-          return;
-        }
-
-        const [startQuery, endQuery] = parts
-          .map((s) => s.trim())
+        const queries = Array.from(getWaypointInputs())
+          .map((i) => i.value.trim())
           .filter(Boolean);
-        if (!startQuery || !endQuery) {
-          errorEl.textContent = "Enter both start and end places.";
+        if (queries.length < 2) {
+          errorEl.textContent = "Enter at least 2 places.";
           return;
         }
 
@@ -492,24 +523,18 @@
               `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?access_token=${mapboxgl.accessToken}`,
             ).then((r) => r.json());
 
-          const [startRes, endRes] = await Promise.all([
-            geocode(startQuery),
-            geocode(endQuery),
-          ]);
+          const results = await Promise.all(queries.map((q) => geocode(q)));
 
-          const start = startRes.features?.[0]?.center;
-          const end = endRes.features?.[0]?.center;
-
-          if (!start) {
-            errorEl.textContent = `Could not find: "${startQuery}"`;
-            return;
-          }
-          if (!end) {
-            errorEl.textContent = `Could not find: "${endQuery}"`;
+          const waypoints = results.map((r) => r.features?.[0]?.center);
+          const firstMissing = waypoints.findIndex((w) => !w);
+          if (firstMissing !== -1) {
+            errorEl.textContent = `Could not find: "${queries[firstMissing]}"`;
             return;
           }
 
-          const coords = `${start[0]},${start[1]};${end[0]},${end[1]}`;
+          const coords = waypoints
+            .map((c) => `${c[0]},${c[1]}`)
+            .join(";");
           const dirRes = await fetch(
             `https://api.mapbox.com/directions/v5/mapbox/driving/${coords}?geometries=geojson&access_token=${mapboxgl.accessToken}`,
           ).then((r) => r.json());
