@@ -129,6 +129,10 @@
       <button id="exportBtn" onclick="exportVideo()" disabled>
         Export video
       </button>
+      <div class="control-row">
+        <input type="checkbox" id="nightMode" />
+        <label for="nightMode">Night mode</label>
+      </div>
       <div
         class="control-toggle"
         id="animationToggle"
@@ -204,9 +208,17 @@
 
       const map = new mapboxgl.Map({
         container: "map",
-        style: "mapbox://styles/mapbox/streets-v12",
+        style: "mapbox://styles/mapbox/standard",
         center: [-74.5, 40],
         zoom: 4,
+      });
+
+      document.getElementById("nightMode").addEventListener("change", (e) => {
+        map.setConfigProperty(
+          "basemap",
+          "lightPreset",
+          e.target.checked ? "night" : "day",
+        );
       });
 
       let currentRoute = null;
@@ -482,6 +494,7 @@
                 "rgba(0,0,0,0)",
               ],
               "line-width": 6,
+              "line-emissive-strength": 0.8,
             },
             layout: { "line-cap": "round", "line-join": "round" },
           });
