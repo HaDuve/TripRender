@@ -6,6 +6,7 @@
   <title>Route Finder</title>
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.11.0/mapbox-gl.js"></script>
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.11.0/mapbox-gl.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7/turf.min.js"></script>
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; font-family: system-ui, sans-serif; }
@@ -35,6 +36,7 @@
       font-weight: 500;
     }
     button:hover { background: #2d8bc0; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
     #error {
       color: #c00;
       font-size: 13px;
@@ -48,6 +50,7 @@
     <input id="route" type="text" placeholder="New York, NY to Boston, MA" value="New York, NY to Boston, MA">
     <br>
     <button onclick="getRoute()">Draw Route</button>
+    <button id="animateBtn" onclick="animateRoute()" disabled>Animate Route</button>
     <div id="error"></div>
   </div>
   <div id="map"></div>
@@ -61,6 +64,68 @@
       center: [-74.5, 40],
       zoom: 4
     });
+
+    let currentRoute = null;
+
+    function lerp(start, end, amt) {
+      return (1 - amt) * start + amt * end;
+    }
+
+    let _previousCameraPosition = null;
+
+    function computeCameraPosition(pitch, bearing, targetPosition, altitude, smooth = false) {
+      const bearingInRadian = bearing / 57.29;
+      const pitchInRadian = (90 - pitch) / 57.29;
+      const lngDiff = ((altitude / Math.tan(pitchInRadian)) * Math.sin(-bearingInRadian)) / 70000;
+      const latDiff = ((altitude / Math.tan(pitchInRadian)) * Math.cos(-bearingInRadian)) / 110000;
+      const newCameraPosition = {
+        lng: targetPosition.lng + lngDiff,
+        lat: targetPosition.lat - latDiff
+      };
+      if (smooth && _previousCameraPosition) {
+        const SMOOTH_FACTOR = 0.95;
+        newCameraPosition.lng = lerp(newCameraPosition.lng, _previousCameraPosition.lng, SMOOTH_FACTOR);
+        newCameraPosition.lat = lerp(newCameraPosition.lat, _previousCameraPosition.lat, SMOOTH_FACTOR);
+      }
+      _previousCameraPosition = newCameraPosition;
+      return newCameraPosition;
+    }
+
+    function animatePath({ map, path, duration, startBearing, startAltitude, pitch }) {
+      _previousCameraPosition = null;
+      return new Promise((resolve) => {
+        const pathDistance = turf.lineDistance(path);
+        let startTime;
+
+        const frame = (currentTime) => {
+          if (!startTime) startTime = currentTime;
+          const animationPhase = (currentTime - startTime) / duration;
+
+          if (animationPhase > 1) {
+            resolve();
+            return;
+          }
+
+          map.setPaintProperty('route', 'line-gradient', [
+            'step', ['line-progress'], '#3b9dd2', animationPhase, 'rgba(0,0,0,0)'
+          ]);
+
+          const [lng, lat] = turf.along(path, pathDistance * animationPhase).geometry.coordinates;
+          const lngLat = { lng, lat };
+          const bearing = startBearing - animationPhase * 200;
+          const correctedPosition = computeCameraPosition(pitch, bearing, lngLat, startAltitude, true);
+
+          const camera = map.getFreeCameraOptions();
+          camera.setPitchBearing(pitch, bearing);
+          camera.position = mapboxgl.MercatorCoordinate.fromLngLat(correctedPosition, startAltitude);
+          map.setFreeCameraOptions(camera);
+
+          requestAnimationFrame(frame);
+        };
+
+        requestAnimationFrame(frame);
+      });
+    }
 
     async function getRoute() {
       const errorEl = document.getElementById('error');
@@ -112,23 +177,51 @@
 
         if (map.getLayer('route')) map.removeLayer('route');
         if (map.getSource('route')) map.removeSource('route');
+        currentRoute = null;
+        document.getElementById('animateBtn').disabled = true;
 
         map.addSource('route', {
           type: 'geojson',
-          data: { type: 'Feature', geometry: { type: 'LineString', coordinates: route } }
+          data: { type: 'Feature', geometry: { type: 'LineString', coordinates: route } },
+          lineMetrics: true
         });
         map.addLayer({
           id: 'route',
           type: 'line',
           source: 'route',
-          paint: { 'line-color': '#3b9dd2', 'line-width': 6 }
+          paint: {
+            'line-gradient': ['step', ['line-progress'], '#3b9dd2', 1, 'rgba(0,0,0,0)'],
+            'line-width': 6
+          },
+          layout: { 'line-cap': 'round', 'line-join': 'round' }
         });
+
+        currentRoute = { type: 'Feature', geometry: { type: 'LineString', coordinates: route } };
+        document.getElementById('animateBtn').disabled = false;
 
         const bounds = new mapboxgl.LngLatBounds();
         route.forEach(c => bounds.extend(c));
-        map.fitBounds(bounds, { padding: 50 });
+        map.fitBounds(bounds, { padding: 50, pitch: 50, bearing: 0 });
       } catch (err) {
         errorEl.textContent = 'Error: ' + (err.message || 'Something went wrong');
+      }
+    }
+
+    async function animateRoute() {
+      if (!currentRoute) return;
+      const btn = document.getElementById('animateBtn');
+      btn.disabled = true;
+      try {
+        await animatePath({
+          map,
+          path: currentRoute,
+          duration: 20000,
+          startBearing: 0,
+          startAltitude: 12000,
+          pitch: 50
+        });
+      } finally {
+        btn.disabled = false;
       }
     }
   </script>
