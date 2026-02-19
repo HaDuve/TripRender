@@ -76,7 +76,8 @@
       }
       #panelWrapper #input {
         width: auto;
-        min-width: 280px;
+        min-width: 560px;
+        max-width: 90vw;
         max-height: 100vh;
         overflow-x: hidden;
         overflow-y: auto;
@@ -87,6 +88,27 @@
         box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
         transform: translateX(calc(-100% - 44px));
         transition: transform 0.2s ease;
+      }
+      .panel-columns {
+        display: flex;
+        gap: 20px;
+        min-height: 75vh;
+        align-items: flex-start;
+      }
+      .panel-col {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
+        flex: 1;
+      }
+      .panel-col-route #addStopBtn {
+        width: 100%;
+        max-width: 600px;
+      }
+      .panel-col-actions button {
+        width: 100%;
+        max-width: 220px;
       }
       #panelWrapper.panel-open #input {
         transform: translateX(0);
@@ -134,7 +156,7 @@
         color: var(--error-color);
         font-size: 13px;
         margin-top: 6px;
-        max-width: 260px;
+        max-width: 600px;
       }
       .control-toggle {
         cursor: pointer;
@@ -200,7 +222,8 @@
         gap: 4px;
       }
       #waypoints input {
-        width: 260px;
+        width: 100%;
+        max-width: 600px;
       }
       .leg-control {
         display: flex;
@@ -220,6 +243,32 @@
         margin: 0;
         padding: 4px 8px;
         font-size: 12px;
+      }
+      .waypoint-row {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        margin: 4px 0;
+        max-width: 628px;
+      }
+      .waypoint-row input {
+        width: auto;
+        flex: 1;
+        min-width: 0;
+        max-width: 600px;
+        margin: 0;
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0;
+      }
+      .waypoint-row .leg-delete-btn {
+        width: 28px;
+        min-width: 28px;
+        height: 34px;
+        padding: 0;
+        font-size: 16px;
+        line-height: 1;
+        border-radius: 0 6px 6px 0;
+        border-left: none;
       }
       #addStopBtn {
         margin-top: 6px;
@@ -245,40 +294,51 @@
         </svg>
       </button>
       <div id="input">
-        <div id="waypoints">
-          <input type="text" placeholder="Start" value="New York, NY" />
-          <div class="leg-control control-row">
-            <label>To next:</label>
-            <select class="leg-mode">
-              <option value="walk">Walk</option>
-              <option value="drive" selected>Drive</option>
-              <option value="fly">Fly</option>
-            </select>
+        <div class="panel-columns">
+          <div class="panel-col panel-col-route">
+            <div id="waypoints">
+              <div class="waypoint-row">
+                <input type="text" placeholder="Start" value="New York, NY" />
+                <button type="button" class="leg-delete-btn" aria-label="Clear or remove" onclick="deleteOrClearWaypoint(this)">×</button>
+              </div>
+              <div class="leg-control control-row">
+                <label>To next:</label>
+                <select class="leg-mode">
+                  <option value="walk">Walk</option>
+                  <option value="drive" selected>Drive</option>
+                  <option value="fly">Fly</option>
+                </select>
+              </div>
+              <div class="waypoint-row">
+                <input type="text" placeholder="End" value="Boston, MA" />
+                <button type="button" class="leg-delete-btn" aria-label="Clear or remove" onclick="deleteOrClearWaypoint(this)">×</button>
+              </div>
+            </div>
+            <button id="addStopBtn" type="button" onclick="addWaypoint()">
+              Add stop
+            </button>
+            <div id="error"></div>
           </div>
-          <input type="text" placeholder="End" value="Boston, MA" />
-        </div>
-        <button id="addStopBtn" type="button" onclick="addWaypoint()">
-          Add stop
-        </button>
-        <button onclick="getRoute()">Draw Route</button>
-        <button id="animateBtn" onclick="animateRoute()" disabled>
-          Animate Route
-        </button>
-        <button id="exportBtn" onclick="exportVideo()" disabled>
-          Export video
-        </button>
-        <div class="control-row">
-          <input type="checkbox" id="nightMode" />
-          <label for="nightMode">Night mode</label>
-        </div>
-        <div
-          class="control-toggle"
-          id="animationToggle"
-          onclick="toggleAnimationControls()"
-        >
-          Animation controls
-        </div>
-        <div id="animationControls">
+          <div class="panel-col panel-col-actions">
+            <button onclick="getRoute()">Draw Route</button>
+            <button id="animateBtn" onclick="animateRoute()" disabled>
+              Animate Route
+            </button>
+            <button id="exportBtn" onclick="exportVideo()" disabled>
+              Export video
+            </button>
+            <div class="control-row">
+              <input type="checkbox" id="nightMode" />
+              <label for="nightMode">Night mode</label>
+            </div>
+            <div
+              class="control-toggle"
+              id="animationToggle"
+              onclick="toggleAnimationControls()"
+            >
+              Animation controls
+            </div>
+            <div id="animationControls">
           <div class="control-row">
             <input type="checkbox" id="lineGradient" checked />
             <label for="lineGradient">Line gradient</label>
@@ -356,9 +416,10 @@
               <option value="1080x1080">1:1</option>
             </select>
           </div>
+            </div>
+            <div id="exportStatus"></div>
+          </div>
         </div>
-        <div id="error"></div>
-        <div id="exportStatus"></div>
       </div>
     </div>
     <div id="map"></div>
@@ -831,6 +892,24 @@
         btn.disabled = getWaypointInputs().length >= MAX_WAYPOINTS;
       }
 
+      function deleteOrClearWaypoint(btn) {
+        const row = btn.closest(".waypoint-row");
+        if (!row) return;
+        const input = row.querySelector("input");
+        if (!input) return;
+        const numWaypoints = getWaypointInputs().length;
+        if (numWaypoints <= 2) {
+          input.value = "";
+          return;
+        }
+        const legToRemove = row.previousElementSibling?.classList?.contains("leg-control")
+          ? row.previousElementSibling
+          : row.nextElementSibling;
+        if (legToRemove?.classList?.contains("leg-control")) legToRemove.remove();
+        row.remove();
+        updateAddStopState();
+      }
+
       function createLegControl() {
         const div = document.createElement("div");
         div.className = "leg-control control-row";
@@ -850,16 +929,30 @@
         return div;
       }
 
+      function createWaypointRow(placeholder) {
+        const row = document.createElement("div");
+        row.className = "waypoint-row";
+        const input = document.createElement("input");
+        input.type = "text";
+        input.placeholder = placeholder;
+        const deleteBtn = document.createElement("button");
+        deleteBtn.type = "button";
+        deleteBtn.className = "leg-delete-btn";
+        deleteBtn.setAttribute("aria-label", "Clear or remove");
+        deleteBtn.textContent = "×";
+        deleteBtn.onclick = function () { deleteOrClearWaypoint(this); };
+        row.appendChild(input);
+        row.appendChild(deleteBtn);
+        return row;
+      }
+
       function addWaypoint() {
         if (getWaypointInputs().length >= MAX_WAYPOINTS) return;
         const container = document.getElementById("waypoints");
         container.appendChild(createLegControl());
-        const input = document.createElement("input");
-        input.type = "text";
-        input.placeholder = "Stop";
-        container.appendChild(input);
+        container.appendChild(createWaypointRow("Stop"));
         updateAddStopState();
-        input.focus();
+        container.querySelector(".waypoint-row:last-of-type input").focus();
       }
 
       async function getRoute() {
@@ -1147,6 +1240,7 @@
           setPanelOpen(true);
         }
       }
+
     </script>
   </body>
 </html>
