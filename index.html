@@ -377,7 +377,8 @@
         return (1 - amt) * start + amt * end;
       }
 
-      // Web Mercator (EPSG:3857) distance so camera aligns with Mapbox line-progress (Mercator-based).
+      // --- Mercator & camera math (see Mapbox blog: building-cinematic-route-animations-with-mapboxgl) ---
+      // Web Mercator (EPSG:3857): x = R*lng*π/180, y = R*ln(tan(π/4 + lat*π/360)). R ≈ 20037508.34 m.
       function mercatorDistanceMeters(a, b) {
         const toM = (lng, lat) => {
           const x = (lng * 20037508.34) / 180;
@@ -444,7 +445,18 @@
       }
 
       let _previousCameraPosition = null;
+      let _previousCameraTarget = null;
 
+      // More south (lower lat) → lower pitch (look more down). Base pitch is at equator; scales with lat.
+      function pitchForLatitude(basePitch, lat) {
+        const PITCH_PER_DEG_LAT = 0.3;
+        const p = basePitch + lat * PITCH_PER_DEG_LAT;
+        return Math.max(0, Math.min(85, p));
+      }
+
+      // Camera position from target on ground: same idea as Mapbox blog (bearing/pitch/altitude → offset).
+      // Radians: 57.2958 ≈ 180/π. Longitude: meters per degree = 111e3*cos(lat) ≈ 70e3 at mid-lat; we use cos(lat).
+      // Latitude: ~111 km/degree. offsetScale=0 → camera directly above target.
       function computeCameraPosition(
         pitch,
         bearing,
@@ -453,20 +465,19 @@
         smooth = false,
         offsetScale = 1,
       ) {
-        const bearingInRadian = bearing / 57.29;
-        const pitchInRadian = (90 - pitch) / 57.29;
-        const latRad = (targetPosition.lat * Math.PI) / 180;
-        const metersPerDegLng = 70000 * Math.max(0.01, Math.cos(latRad));
+        const rad = Math.PI / 180;
+        const bearingRad = bearing * rad;
+        const pitchRad = (90 - pitch) * rad;
+        const latRad = targetPosition.lat * rad;
+        const metersPerDegLng = 111000 * Math.max(0.01, Math.cos(latRad));
         const lngDiff =
           (offsetScale *
-            ((altitude / Math.tan(pitchInRadian)) *
-              Math.sin(-bearingInRadian))) /
+            ((altitude / Math.tan(pitchRad)) * Math.sin(-bearingRad))) /
           metersPerDegLng;
         const latDiff =
           (offsetScale *
-            ((altitude / Math.tan(pitchInRadian)) *
-              Math.cos(-bearingInRadian))) /
-          110000;
+            ((altitude / Math.tan(pitchRad)) * Math.cos(-bearingRad))) /
+          111000;
         const newCameraPosition = {
           lng: targetPosition.lng + lngDiff,
           lat: targetPosition.lat - latDiff,
@@ -550,21 +561,32 @@
             : turf.along(path, pathDistance * animationPhase, {
                 units: "kilometers",
               }).geometry.coordinates;
-          const targetPosition = { lng, lat };
+          let targetPosition = { lng, lat };
+          // Optional lag: smooth camera target so it doesn't run ahead of the blue line.
+          const CAMERA_LAG = 0.22;
+          if (_previousCameraTarget) {
+            targetPosition = {
+              lng: lerp(_previousCameraTarget.lng, targetPosition.lng, CAMERA_LAG),
+              lat: lerp(_previousCameraTarget.lat, targetPosition.lat, CAMERA_LAG),
+            };
+          }
+          _previousCameraTarget = targetPosition;
+          const effectivePitch = pitchForLatitude(pitch, targetPosition.lat);
+          // offsetScale=1 so camera is placed behind the target; view ray then hits the progress point.
           const cameraPos = computeCameraPosition(
-            pitch,
+            effectivePitch,
             startBearing,
             targetPosition,
             startAltitude,
             false,
-            0,
+            1,
           );
           const camera = map.getFreeCameraOptions();
           camera.position = mapboxgl.MercatorCoordinate.fromLngLat(
             [cameraPos.lng, cameraPos.lat],
             startAltitude,
           );
-          camera.setPitchBearing(pitch, startBearing);
+          camera.setPitchBearing(effectivePitch, startBearing);
           map.setFreeCameraOptions(camera);
         }
       }
@@ -584,6 +606,7 @@
         onRender,
       }) {
         _previousCameraPosition = null;
+        _previousCameraTarget = null;
         const line = path.geometry
           ? turf.lineString(path.geometry.coordinates.slice())
           : path;
