@@ -94,6 +94,12 @@
       #panelWrapper:not(.panel-open) #input {
         pointer-events: none;
       }
+      #panelWrapper:not(.panel-open) {
+        pointer-events: none;
+      }
+      #panelWrapper:not(.panel-open) #panelToggle {
+        pointer-events: auto;
+      }
       #map {
         width: 100vw;
         height: 100vh;
