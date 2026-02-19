@@ -225,101 +225,110 @@
   </head>
   <body>
     <div id="panelWrapper">
-      <button type="button" id="panelToggle" onclick="togglePanel()" aria-label="Toggle panel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z"/></svg></button>
-      <div id="input">
-      <div id="waypoints">
-        <input type="text" placeholder="Start" value="New York, NY" />
-        <div class="leg-control control-row">
-          <label>To next:</label>
-          <select class="leg-mode">
-            <option value="walk">Walk</option>
-            <option value="drive" selected>Drive</option>
-            <option value="fly">Fly</option>
-          </select>
-        </div>
-        <input type="text" placeholder="End" value="Boston, MA" />
-      </div>
-      <button id="addStopBtn" type="button" onclick="addWaypoint()">
-        Add stop
-      </button>
-      <button onclick="getRoute()">Draw Route</button>
-      <button id="animateBtn" onclick="animateRoute()" disabled>
-        Animate Route
-      </button>
-      <button id="exportBtn" onclick="exportVideo()" disabled>
-        Export video
-      </button>
-      <div class="control-row">
-        <input type="checkbox" id="nightMode" />
-        <label for="nightMode">Night mode</label>
-      </div>
-      <div
-        class="control-toggle"
-        id="animationToggle"
-        onclick="toggleAnimationControls()"
+      <button
+        type="button"
+        id="panelToggle"
+        onclick="togglePanel()"
+        aria-label="Toggle panel"
       >
-        Animation controls
-      </div>
-      <div id="animationControls">
-        <div class="control-row">
-          <input type="checkbox" id="lineGradient" checked />
-          <label for="lineGradient">Line gradient</label>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z" />
+        </svg>
+      </button>
+      <div id="input">
+        <div id="waypoints">
+          <input type="text" placeholder="Start" value="New York, NY" />
+          <div class="leg-control control-row">
+            <label>To next:</label>
+            <select class="leg-mode">
+              <option value="walk">Walk</option>
+              <option value="drive" selected>Drive</option>
+              <option value="fly">Fly</option>
+            </select>
+          </div>
+          <input type="text" placeholder="End" value="Boston, MA" />
         </div>
+        <button id="addStopBtn" type="button" onclick="addWaypoint()">
+          Add stop
+        </button>
+        <button onclick="getRoute()">Draw Route</button>
+        <button id="animateBtn" onclick="animateRoute()" disabled>
+          Animate Route
+        </button>
+        <button id="exportBtn" onclick="exportVideo()" disabled>
+          Export video
+        </button>
         <div class="control-row">
-          <input type="checkbox" id="cameraFollow" checked />
-          <label for="cameraFollow">Camera follow</label>
+          <input type="checkbox" id="nightMode" />
+          <label for="nightMode">Night mode</label>
         </div>
-        <div class="control-row">
-          <input type="checkbox" id="bearingChange" />
-          <label for="bearingChange">Bearing change</label>
+        <div
+          class="control-toggle"
+          id="animationToggle"
+          onclick="toggleAnimationControls()"
+        >
+          Animation controls
         </div>
-        <div class="control-row">
-          <label for="duration">Duration (ms)</label>
-          <input
-            type="number"
-            id="duration"
-            value="2000"
-            min="1000"
-            step="1000"
-          />
+        <div id="animationControls">
+          <div class="control-row">
+            <input type="checkbox" id="lineGradient" checked />
+            <label for="lineGradient">Line gradient</label>
+          </div>
+          <div class="control-row">
+            <input type="checkbox" id="cameraFollow" checked />
+            <label for="cameraFollow">Camera follow</label>
+          </div>
+          <div class="control-row">
+            <input type="checkbox" id="bearingChange" />
+            <label for="bearingChange">Bearing change</label>
+          </div>
+          <div class="control-row">
+            <label for="duration">Duration (ms)</label>
+            <input
+              type="number"
+              id="duration"
+              value="2000"
+              min="1000"
+              step="1000"
+            />
+          </div>
+          <div class="control-row">
+            <label for="startBearing">Bearing (°)</label>
+            <input
+              type="number"
+              id="startBearing"
+              value="0"
+              min="-180"
+              max="180"
+            />
+          </div>
+          <div class="control-row">
+            <label for="startAltitude">Altitude (m)</label>
+            <input
+              type="number"
+              id="startAltitude"
+              value="500000"
+              min="100"
+              step="100"
+            />
+          </div>
+          <div class="control-row">
+            <label for="pitch">Pitch (°)</label>
+            <input type="number" id="pitch" value="20" min="0" max="85" />
+          </div>
+          <div class="control-row">
+            <label for="exportSize">Export size</label>
+            <select
+              id="exportSize"
+              style="width: 80px; margin: 0 0 0 auto; padding: 6px"
+            >
+              <option value="1280x720">16:9</option>
+              <option value="1080x1080">1:1</option>
+            </select>
+          </div>
         </div>
-        <div class="control-row">
-          <label for="startBearing">Bearing (°)</label>
-          <input
-            type="number"
-            id="startBearing"
-            value="0"
-            min="-180"
-            max="180"
-          />
-        </div>
-        <div class="control-row">
-          <label for="startAltitude">Altitude (m)</label>
-          <input
-            type="number"
-            id="startAltitude"
-            value="500000"
-            min="100"
-            step="100"
-          />
-        </div>
-        <div class="control-row">
-          <label for="pitch">Pitch (°)</label>
-          <input type="number" id="pitch" value="20" min="0" max="85" />
-        </div>
-        <div class="control-row">
-          <label for="exportSize">Export size</label>
-          <select
-            id="exportSize"
-            style="width: 80px; margin: 0 0 0 auto; padding: 6px"
-          >
-            <option value="1280x720">16:9</option>
-            <option value="1080x1080">1:1</option>
-          </select>
-        </div>
-      </div>
-      <div id="error"></div>
-      <div id="exportStatus"></div>
+        <div id="error"></div>
+        <div id="exportStatus"></div>
       </div>
     </div>
     <div id="map"></div>
@@ -372,7 +381,9 @@
       function mercatorDistanceMeters(a, b) {
         const toM = (lng, lat) => {
           const x = (lng * 20037508.34) / 180;
-          const y = Math.log(Math.tan((90 + lat) * (Math.PI / 360))) * (20037508.34 / Math.PI);
+          const y =
+            Math.log(Math.tan((90 + lat) * (Math.PI / 360))) *
+            (20037508.34 / Math.PI);
           return { x, y };
         };
         const p = toM(a[0], a[1]);
@@ -410,12 +421,16 @@
       function pointAlongRoute(coords, distanceKm) {
         if (!coords.length) return coords[0];
         if (coords.length === 1 || distanceKm <= 0) return coords[0];
-        const totalKm = turf.length(turf.lineString(coords), { units: "kilometers" });
+        const totalKm = turf.length(turf.lineString(coords), {
+          units: "kilometers",
+        });
         if (distanceKm >= totalKm) return coords[coords.length - 1];
         let acc = 0;
         for (let i = 1; i < coords.length; i++) {
           const seg = [coords[i - 1], coords[i]];
-          const segKm = turf.length(turf.lineString(seg), { units: "kilometers" });
+          const segKm = turf.length(turf.lineString(seg), {
+            units: "kilometers",
+          });
           if (acc + segKm >= distanceKm) {
             const t = (distanceKm - acc) / segKm;
             return [
@@ -443,12 +458,14 @@
         const latRad = (targetPosition.lat * Math.PI) / 180;
         const metersPerDegLng = 70000 * Math.max(0.01, Math.cos(latRad));
         const lngDiff =
-          offsetScale *
-          ((altitude / Math.tan(pitchInRadian)) * Math.sin(-bearingInRadian)) /
+          (offsetScale *
+            ((altitude / Math.tan(pitchInRadian)) *
+              Math.sin(-bearingInRadian))) /
           metersPerDegLng;
         const latDiff =
-          offsetScale *
-          ((altitude / Math.tan(pitchInRadian)) * Math.cos(-bearingInRadian)) /
+          (offsetScale *
+            ((altitude / Math.tan(pitchInRadian)) *
+              Math.cos(-bearingInRadian))) /
           110000;
         const newCameraPosition = {
           lng: targetPosition.lng + lngDiff,
@@ -483,7 +500,9 @@
         try {
           const saved = localStorage.getItem("panelOpen");
           const open = saved !== null ? saved === "1" : true;
-          document.getElementById("panelWrapper").classList.toggle("panel-open", open);
+          document
+            .getElementById("panelWrapper")
+            .classList.toggle("panel-open", open);
         } catch (_) {}
       })();
 
@@ -528,7 +547,9 @@
           // Use Mercator-based progress so camera aligns with line-progress (2D render).
           const [lng, lat] = coords
             ? pointAlongRouteByProgress(coords, animationPhase)
-            : turf.along(path, pathDistance * animationPhase, { units: "kilometers" }).geometry.coordinates;
+            : turf.along(path, pathDistance * animationPhase, {
+                units: "kilometers",
+              }).geometry.coordinates;
           const targetPosition = { lng, lat };
           const cameraPos = computeCameraPosition(
             pitch,
@@ -543,7 +564,7 @@
             [cameraPos.lng, cameraPos.lat],
             startAltitude,
           );
-          camera.lookAtPoint(targetPosition);
+          camera.setPitchBearing(pitch, startBearing);
           map.setFreeCameraOptions(camera);
         }
       }
@@ -597,8 +618,7 @@
               onAdd() {},
               render(gl, matrix) {
                 now += 1000 / 60;
-                if (typeof mapboxgl.setNow === "function")
-                  mapboxgl.setNow(now);
+                if (typeof mapboxgl.setNow === "function") mapboxgl.setNow(now);
                 const animationPhase = (now - startTime) / duration;
                 if (animationPhase > 1) {
                   map.removeLayer("_export-driver");
@@ -651,8 +671,10 @@
       }
 
       function getLegModes() {
-        return Array.from(document.querySelectorAll("#waypoints .leg-mode")).map(
-          (el) => (el.value === "walk" || el.value === "fly" ? el.value : "drive")
+        return Array.from(
+          document.querySelectorAll("#waypoints .leg-mode"),
+        ).map((el) =>
+          el.value === "walk" || el.value === "fly" ? el.value : "drive",
         );
       }
 
@@ -716,7 +738,8 @@
               `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?access_token=${mapboxgl.accessToken}`,
             ).then(async (r) => {
               const json = await r.json();
-              if (!r.ok) throw new Error(json.message || `Geocoding HTTP ${r.status}`);
+              if (!r.ok)
+                throw new Error(json.message || `Geocoding HTTP ${r.status}`);
               return json;
             });
 
@@ -741,7 +764,9 @@
             let segment;
             if (mode === "fly") {
               segment = [a, b];
-              routeDistanceMeters += turf.length(turf.lineString([a, b]), { units: "meters" });
+              routeDistanceMeters += turf.length(turf.lineString([a, b]), {
+                units: "meters",
+              });
             } else {
               const profile = mode === "walk" ? "walking" : "driving";
               const coords = `${a[0]},${a[1]};${b[0]},${b[1]}`;
@@ -752,7 +777,9 @@
               if (!dirRes.routes?.length) {
                 segment = [a, b];
                 setLegMode(i, "fly");
-                routeDistanceMeters += turf.length(turf.lineString([a, b]), { units: "meters" });
+                routeDistanceMeters += turf.length(turf.lineString([a, b]), {
+                  units: "meters",
+                });
               } else {
                 segment = dirRes.routes[0].geometry.coordinates;
                 routeDistanceMeters += dirRes.routes[0].distance;
@@ -812,10 +839,7 @@
 
           const segmentLength = routeDistanceMeters / numStops;
           const altitudeM = Math.round(
-            Math.max(
-              50000,
-              Math.min(2000000, segmentLength * 1.5)
-            )
+            Math.max(50000, Math.min(2000000, segmentLength * 1.5)),
           );
           document.getElementById("startAltitude").value = altitudeM;
 
