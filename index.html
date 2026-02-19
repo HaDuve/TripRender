@@ -48,37 +48,48 @@
         display: flex;
         align-items: flex-start;
       }
-      #panelToggle {
-        width: 28px;
-        min-height: 44px;
-        padding: 10px 6px;
+      #panelWrapper #panelToggle {
+        width: 44px;
+        min-width: 44px;
+        min-height: 48px;
+        padding: 0;
+        margin: 0;
         background: var(--panel-bg);
         color: var(--panel-text);
         border: none;
+        border-right: 1px solid var(--input-border);
         border-radius: 0 8px 8px 0;
-        box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
+        box-shadow: 2px 0 12px rgba(0, 0, 0, 0.2);
         cursor: pointer;
-        font-size: 18px;
-        line-height: 1;
         display: flex;
         align-items: center;
         justify-content: center;
         flex-shrink: 0;
       }
-      #panelToggle:hover {
+      #panelWrapper #panelToggle svg {
+        width: 22px;
+        height: 22px;
+        fill: currentColor;
+      }
+      #panelWrapper #panelToggle:hover {
         background: var(--input-bg);
       }
-      #input {
+      #panelWrapper #input {
+        width: auto;
+        min-width: 280px;
         background: var(--panel-bg);
         color: var(--panel-text);
         padding: 12px;
         border-radius: 0 8px 8px 0;
         box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
-        transform: translateX(-100%);
+        transform: translateX(calc(-100% - 44px));
         transition: transform 0.2s ease;
       }
       #panelWrapper.panel-open #input {
         transform: translateX(0);
+      }
+      #panelWrapper:not(.panel-open) #input {
+        pointer-events: none;
       }
       #map {
         width: 100vw;
@@ -195,7 +206,7 @@
   </head>
   <body>
     <div id="panelWrapper">
-      <button type="button" id="panelToggle" onclick="togglePanel()" aria-label="Toggle panel">≡</button>
+      <button type="button" id="panelToggle" onclick="togglePanel()" aria-label="Toggle panel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z"/></svg></button>
       <div id="input">
       <div id="waypoints">
         <input type="text" placeholder="Start" value="New York, NY" />
@@ -376,18 +387,18 @@
         } catch (_) {}
       }
 
+      (function initPanelState() {
+        try {
+          const saved = localStorage.getItem("panelOpen");
+          const open = saved !== null ? saved === "1" : true;
+          document.getElementById("panelWrapper").classList.toggle("panel-open", open);
+        } catch (_) {}
+      })();
+
       function togglePanel() {
         const wrapper = document.getElementById("panelWrapper");
         setPanelOpen(!wrapper.classList.contains("panel-open"));
       }
-
-      (function initPanelState() {
-        try {
-          const saved = localStorage.getItem("panelOpen");
-          if (saved !== null)
-            document.getElementById("panelWrapper").classList.toggle("panel-open", saved === "1");
-        } catch (_) {}
-      })();
 
       function toggleAnimationControls() {
         const toggle = document.getElementById("animationToggle");
@@ -574,7 +585,11 @@
           const geocode = (q) =>
             fetch(
               `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?access_token=${mapboxgl.accessToken}`,
-            ).then((r) => r.json());
+            ).then(async (r) => {
+              const json = await r.json();
+              if (!r.ok) throw new Error(json.message || `Geocoding HTTP ${r.status}`);
+              return json;
+            });
 
           const results = await Promise.all(queries.map((q) => geocode(q)));
 

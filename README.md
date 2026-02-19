@@ -12,6 +12,21 @@ Single-page route finder: enter "Place A to Place B", get driving directions on 
 - **Option A:** Temporarily replace `__MAPBOX_TOKEN__` in `index.html` with your token, open in browser
 - **Option B:** `MAPBOX_TOKEN=pk.your.token node build.js` then open `dist/index.html`
 
+### Local build with saved token
+
+1. Create `.env` in project root with:
+
+   ```
+   MAPBOX_TOKEN=pk.your.actual.token
+   ```
+
+   (`.env` is in `.gitignore` — don’t commit it.)
+
+2. Fresh build:
+   - **Node 20.6+:** `node --env-file=.env build.js`
+
+3. Serve `dist`: e.g. `npx serve dist` or `cd dist && python3 -m http.server 8000`, then open the URL in the browser.
+
 ## Deploy to GitHub Pages
 
 ```bash
