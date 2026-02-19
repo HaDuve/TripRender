@@ -202,6 +202,35 @@
         opacity: 0.5;
         cursor: not-allowed;
       }
+      .draw-route-wrap {
+        position: relative;
+        width: 100%;
+        max-width: 220px;
+      }
+      .draw-route-wrap .draw-route-overlay {
+        display: none;
+        position: absolute;
+        inset: 0;
+        background: rgba(255, 255, 255, 0.7);
+        border-radius: 6px;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+      }
+      .draw-route-wrap.loading .draw-route-overlay {
+        display: flex;
+      }
+      .draw-route-overlay .spinner {
+        width: 24px;
+        height: 24px;
+        border: 3px solid var(--input-border);
+        border-top-color: var(--btn-bg);
+        border-radius: 50%;
+        animation: draw-route-spin 0.8s linear infinite;
+      }
+      @keyframes draw-route-spin {
+        to { transform: rotate(360deg); }
+      }
       #error {
         color: var(--error-color);
         font-size: 13px;
@@ -370,7 +399,12 @@
             <div id="error"></div>
           </div>
           <div class="panel-col panel-col-actions">
-            <button onclick="getRoute()">Draw Route</button>
+            <div class="draw-route-wrap" id="drawRouteWrap">
+              <button id="drawRouteBtn" onclick="getRoute()">Draw Route</button>
+              <div class="draw-route-overlay" aria-hidden="true">
+                <span class="spinner"></span>
+              </div>
+            </div>
             <button id="animateBtn" onclick="animateRoute()" disabled>
               Animate Route
             </button>
@@ -1094,6 +1128,9 @@
         const errorEl = document.getElementById("error");
         errorEl.textContent = "";
 
+        const wrap = document.getElementById("drawRouteWrap");
+        const btn = document.getElementById("drawRouteBtn");
+
         const queries = Array.from(getWaypointInputs())
           .map((i) => i.value.trim())
           .filter(Boolean);
@@ -1101,6 +1138,9 @@
           errorEl.textContent = "Enter at least 2 places.";
           return;
         }
+
+        wrap?.classList.add("loading");
+        btn.disabled = true;
 
         try {
           const geocode = (q) =>
@@ -1244,6 +1284,9 @@
         } catch (err) {
           errorEl.textContent =
             "Error: " + (err.message || "Something went wrong");
+        } finally {
+          wrap?.classList.remove("loading");
+          btn.disabled = false;
         }
       }
 
