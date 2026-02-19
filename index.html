@@ -460,10 +460,19 @@
             <label for="exportSize">Export size</label>
             <select
               id="exportSize"
-              style="width: 80px; margin: 0 0 0 auto; padding: 6px"
+              style="min-width: 140px; margin: 0 0 0 auto; padding: 6px"
             >
-              <option value="1280x720">16:9</option>
-              <option value="1080x1080">1:1</option>
+              <optgroup label="Portrait">
+                <option value="1080x1920">9:16 (Reels/Shorts)</option>
+                <option value="1080x1350">4:5 (IG portrait)</option>
+              </optgroup>
+              <optgroup label="Landscape">
+                <option value="1920x1080">16:9 (1080p)</option>
+                <option value="1280x720">16:9 (720p)</option>
+              </optgroup>
+              <optgroup label="Square">
+                <option value="1080x1080">1:1</option>
+              </optgroup>
             </select>
           </div>
             </div>
