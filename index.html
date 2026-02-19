@@ -293,6 +293,27 @@
             />
           </div>
           <div class="control-row">
+            <label for="maxTimePerStep">Max time per step (ms)</label>
+            <input
+              type="number"
+              id="maxTimePerStep"
+              value="2000"
+              min="500"
+              step="500"
+            />
+          </div>
+          <div class="control-row">
+            <label for="speedup">Max speedup (1–4)</label>
+            <input
+              type="number"
+              id="speedup"
+              value="4"
+              min="1"
+              max="4"
+              step="1"
+            />
+          </div>
+          <div class="control-row">
             <label for="startBearing">Bearing (°)</label>
             <input
               type="number"
@@ -529,6 +550,60 @@
         panel.classList.toggle("expanded");
       }
 
+      function getLegDurations(legLengths, maxTimePerStep, speedup) {
+        if (!legLengths?.length) return null;
+        const safeSpeedup = Math.max(1, Number(speedup) || 1);
+        const safeMax = Math.max(0, Number(maxTimePerStep) || 2000);
+        const maxLegLength = Math.max(...legLengths, 0);
+        if (maxLegLength === 0)
+          return legLengths.map(() => safeMax);
+        const minDur = safeMax / safeSpeedup;
+        const range = safeMax - minDur;
+        return legLengths.map(
+          (len) => minDur + range * (len / maxLegLength),
+        );
+      }
+
+      function timeToProgress(
+        elapsedMs,
+        legEndProgress,
+        legLengths,
+        maxTimePerStep,
+        speedup,
+      ) {
+        const numLegs = legEndProgress.length;
+        if (numLegs === 0) return 1;
+        const legDurations = getLegDurations(legLengths, maxTimePerStep, speedup);
+        const safeMax = Math.max(0, Number(maxTimePerStep) || 2000);
+        const totalDuration = legDurations
+          ? legDurations.reduce((a, b) => a + b, 0)
+          : numLegs * safeMax;
+        if (
+          !Number.isFinite(totalDuration) ||
+          totalDuration <= 0 ||
+          elapsedMs >= totalDuration
+        )
+          return 1;
+        const durs = legDurations ?? legEndProgress.map(() => safeMax);
+        let cum = 0;
+        let legIndex = 0;
+        for (let i = 0; i < numLegs; i++) {
+          if (elapsedMs < cum + durs[i]) {
+            legIndex = i;
+            break;
+          }
+          cum += durs[i];
+          legIndex = i;
+        }
+        const legDur = durs[legIndex];
+        const tInLeg =
+          legDur <= 0 || !Number.isFinite(legDur) ? 1 : (elapsedMs - cum) / legDur;
+        const progressStart =
+          legIndex === 0 ? 0 : legEndProgress[legIndex - 1];
+        const progressEnd = legEndProgress[legIndex];
+        return progressStart + tInLeg * (progressEnd - progressStart);
+      }
+
       function updateAnimationFrame(
         map,
         path,
@@ -594,7 +669,8 @@
       function animatePath({
         map,
         path,
-        duration,
+        maxTimePerStep,
+        speedup,
         startBearing,
         startAltitude,
         pitch,
@@ -611,6 +687,12 @@
           ? turf.lineString(path.geometry.coordinates.slice())
           : path;
         const pathDistance = turf.length(line, { units: "kilometers" });
+        const legEndProgress = path.properties?.legEndProgress ?? [1];
+        const legLengths = path.properties?.legLengths ?? null;
+        const legDurations = getLegDurations(legLengths, maxTimePerStep, speedup);
+        const duration = legDurations
+          ? legDurations.reduce((a, b) => a + b, 0)
+          : legEndProgress.length * maxTimePerStep;
         const opts = {
           startBearing,
           startAltitude,
@@ -625,16 +707,30 @@
             let now =
               typeof performance !== "undefined" ? performance.now() : 0;
             const startTime = now;
+            const maxElapsed = Math.max(duration * 1.5, duration + 5000);
             if (typeof mapboxgl.setNow === "function") mapboxgl.setNow(now);
 
-            // Capture on each render (Mapbox video-export: readPixels when map has drawn)
+            const done = () => {
+              map.removeLayer("_export-driver");
+              map.off("render", captureFrame);
+              if (typeof mapboxgl.restoreNow === "function")
+                mapboxgl.restoreNow();
+              resolve();
+            };
+
             const captureFrame = () => {
-              const animationPhase = (now - startTime) / duration;
-              if (onProgress) onProgress(animationPhase);
+              const elapsed = now - startTime;
+              const animationPhase = timeToProgress(
+                elapsed,
+                legEndProgress,
+                legLengths,
+                maxTimePerStep,
+                speedup,
+              );
+              if (onProgress) onProgress(Math.min(1, animationPhase));
               if (onRender) onRender();
             };
 
-            // Custom layer drives the render loop (like Mapbox easeTo)
             const driverLayer = {
               id: "_export-driver",
               type: "custom",
@@ -642,13 +738,20 @@
               render(gl, matrix) {
                 now += 1000 / 60;
                 if (typeof mapboxgl.setNow === "function") mapboxgl.setNow(now);
-                const animationPhase = (now - startTime) / duration;
-                if (animationPhase > 1) {
-                  map.removeLayer("_export-driver");
-                  map.off("render", captureFrame);
-                  if (typeof mapboxgl.restoreNow === "function")
-                    mapboxgl.restoreNow();
-                  resolve();
+                const elapsed = now - startTime;
+                if (elapsed >= duration || elapsed >= maxElapsed) {
+                  done();
+                  return;
+                }
+                const animationPhase = timeToProgress(
+                  elapsed,
+                  legEndProgress,
+                  legLengths,
+                  maxTimePerStep,
+                  speedup,
+                );
+                if (animationPhase >= 0.9999) {
+                  done();
                   return;
                 }
                 updateAnimationFrame(
@@ -672,9 +775,16 @@
           let startTime;
           const frame = (currentTime) => {
             if (!startTime) startTime = currentTime;
-            const animationPhase = (currentTime - startTime) / duration;
+            const elapsed = currentTime - startTime;
+            const animationPhase = timeToProgress(
+              elapsed,
+              legEndProgress,
+              legLengths,
+              maxTimePerStep,
+              speedup,
+            );
 
-            if (animationPhase > 1) {
+            if (animationPhase >= 1) {
               resolve();
               return;
             }
@@ -777,6 +887,7 @@
 
           const modes = getLegModes();
           const routeCoords = [];
+          const legLengths = [];
           let routeDistanceMeters = 0;
 
           for (let i = 0; i < waypoints.length - 1; i++) {
@@ -809,6 +920,9 @@
               }
             }
 
+            legLengths.push(
+              turf.length(turf.lineString(segment), { units: "kilometers" }),
+            );
             if (routeCoords.length > 0) {
               routeCoords.pop();
             }
@@ -816,6 +930,15 @@
           }
 
           const route = routeCoords;
+          const totalPathKm = legLengths.reduce((a, b) => a + b, 0);
+          const legEndProgress =
+            totalPathKm <= 0
+              ? [1]
+              : legLengths.map((_, i) =>
+                  legLengths
+                    .slice(0, i + 1)
+                    .reduce((a, b) => a + b, 0) / totalPathKm,
+                );
 
           if (map.getLayer("route")) map.removeLayer("route");
           if (map.getSource("route")) map.removeSource("route");
@@ -852,12 +975,24 @@
           currentRoute = {
             type: "Feature",
             geometry: { type: "LineString", coordinates: route },
+            properties: { legEndProgress, legLengths },
           };
           document.getElementById("animateBtn").disabled = false;
           document.getElementById("exportBtn").disabled = false;
 
           const numStops = queries.length;
-          const durationMs = 2000 + 2000 * numStops;
+          const maxTimePerStep =
+            Number(document.getElementById("maxTimePerStep").value) || 2000;
+          const speedup =
+            Number(document.getElementById("speedup")?.value) || 4;
+          const legDurationsForDuration = getLegDurations(
+            legLengths,
+            maxTimePerStep,
+            speedup,
+          );
+          const durationMs = legDurationsForDuration
+            ? legDurationsForDuration.reduce((a, b) => a + b, 0)
+            : (numStops - 1) * maxTimePerStep;
           document.getElementById("duration").value = Math.round(durationMs);
 
           const segmentLength = routeDistanceMeters / numStops;
@@ -884,7 +1019,9 @@
           await animatePath({
             map,
             path: currentRoute,
-            duration: Number(document.getElementById("duration").value) || 2000,
+            maxTimePerStep:
+              Number(document.getElementById("maxTimePerStep").value) || 2000,
+            speedup: Number(document.getElementById("speedup")?.value) || 4,
             startBearing:
               Number(document.getElementById("startBearing").value) || 0,
             startAltitude:
@@ -960,12 +1097,12 @@
 
           statusEl.textContent = "Exporting...";
 
-          const duration =
-            Number(document.getElementById("duration").value) || 2000;
           await animatePath({
             map,
             path: currentRoute,
-            duration,
+            maxTimePerStep:
+              Number(document.getElementById("maxTimePerStep").value) || 2000,
+            speedup: Number(document.getElementById("speedup")?.value) || 4,
             startBearing:
               Number(document.getElementById("startBearing").value) || 0,
             startAltitude:
