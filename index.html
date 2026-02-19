@@ -193,6 +193,25 @@
       #waypoints input {
         width: 260px;
       }
+      .leg-control {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 2px 0;
+        font-size: 12px;
+      }
+      .leg-control label {
+        flex: 0 0 auto;
+        color: var(--secondary-text);
+        margin: 0;
+      }
+      .leg-control select.leg-mode {
+        width: auto;
+        min-width: 90px;
+        margin: 0;
+        padding: 4px 8px;
+        font-size: 12px;
+      }
       #addStopBtn {
         margin-top: 6px;
         background: transparent;
@@ -210,6 +229,14 @@
       <div id="input">
       <div id="waypoints">
         <input type="text" placeholder="Start" value="New York, NY" />
+        <div class="leg-control control-row">
+          <label>To next:</label>
+          <select class="leg-mode">
+            <option value="walk">Walk</option>
+            <option value="drive" selected>Drive</option>
+            <option value="fly">Fly</option>
+          </select>
+        </div>
         <input type="text" placeholder="End" value="Boston, MA" />
       </div>
       <button id="addStopBtn" type="button" onclick="addWaypoint()">
@@ -341,6 +368,27 @@
         return (1 - amt) * start + amt * end;
       }
 
+      function pointAlongRoute(coords, distanceKm) {
+        if (!coords.length) return coords[0];
+        if (coords.length === 1 || distanceKm <= 0) return coords[0];
+        const totalKm = turf.length(turf.lineString(coords), { units: "kilometers" });
+        if (distanceKm >= totalKm) return coords[coords.length - 1];
+        let acc = 0;
+        for (let i = 1; i < coords.length; i++) {
+          const seg = [coords[i - 1], coords[i]];
+          const segKm = turf.length(turf.lineString(seg), { units: "kilometers" });
+          if (acc + segKm >= distanceKm) {
+            const t = (distanceKm - acc) / segKm;
+            return [
+              lerp(coords[i - 1][0], coords[i][0], t),
+              lerp(coords[i - 1][1], coords[i][1], t),
+            ];
+          }
+          acc += segKm;
+        }
+        return coords[coords.length - 1];
+      }
+
       let _previousCameraPosition = null;
 
       function computeCameraPosition(
@@ -432,8 +480,11 @@
           ]);
         }
         if (cameraFollow) {
-          const [lng, lat] = turf.along(path, pathDistance * animationPhase)
-            .geometry.coordinates;
+          const distanceAlong = pathDistance * animationPhase;
+          const coords = path.geometry?.coordinates ?? path.coordinates;
+          const [lng, lat] = coords
+            ? pointAlongRoute(coords, distanceAlong)
+            : turf.along(path, distanceAlong, { units: "kilometers" }).geometry.coordinates;
           const lngLat = { lng, lat };
           const bearing = bearingChange
             ? startBearing - animationPhase * 200
@@ -443,7 +494,7 @@
             bearing,
             lngLat,
             startAltitude,
-            true,
+            false,
           );
           const camera = map.getFreeCameraOptions();
           camera.setPitchBearing(pitch, bearing);
@@ -470,7 +521,10 @@
         onRender,
       }) {
         _previousCameraPosition = null;
-        const pathDistance = turf.length(path);
+        const line = path.geometry
+          ? turf.lineString(path.geometry.coordinates.slice())
+          : path;
+        const pathDistance = turf.length(line, { units: "kilometers" });
         const opts = {
           startBearing,
           startAltitude,
@@ -514,7 +568,7 @@
                 }
                 updateAnimationFrame(
                   map,
-                  path,
+                  line,
                   pathDistance,
                   Math.min(animationPhase, 1),
                   opts,
@@ -524,7 +578,7 @@
             };
 
             map.on("render", captureFrame);
-            updateAnimationFrame(map, path, pathDistance, 0, opts);
+            updateAnimationFrame(map, line, pathDistance, 0, opts);
             map.addLayer(driverLayer);
           });
         }
@@ -540,7 +594,7 @@
               return;
             }
 
-            updateAnimationFrame(map, path, pathDistance, animationPhase, opts);
+            updateAnimationFrame(map, line, pathDistance, animationPhase, opts);
             requestAnimationFrame(frame);
           };
 
@@ -554,17 +608,50 @@
         return document.querySelectorAll("#waypoints input");
       }
 
+      function getLegModes() {
+        return Array.from(document.querySelectorAll("#waypoints .leg-mode")).map(
+          (el) => (el.value === "walk" || el.value === "fly" ? el.value : "drive")
+        );
+      }
+
+      function setLegMode(legIndex, mode) {
+        const selects = document.querySelectorAll("#waypoints .leg-mode");
+        const el = selects[legIndex];
+        if (el) el.value = mode;
+      }
+
       function updateAddStopState() {
         const btn = document.getElementById("addStopBtn");
         btn.disabled = getWaypointInputs().length >= MAX_WAYPOINTS;
       }
 
+      function createLegControl() {
+        const div = document.createElement("div");
+        div.className = "leg-control control-row";
+        const label = document.createElement("label");
+        label.textContent = "To next:";
+        const select = document.createElement("select");
+        select.className = "leg-mode";
+        ["walk", "drive", "fly"].forEach((val) => {
+          const opt = document.createElement("option");
+          opt.value = val;
+          opt.textContent = val.charAt(0).toUpperCase() + val.slice(1);
+          if (val === "drive") opt.selected = true;
+          select.appendChild(opt);
+        });
+        div.appendChild(label);
+        div.appendChild(select);
+        return div;
+      }
+
       function addWaypoint() {
         if (getWaypointInputs().length >= MAX_WAYPOINTS) return;
+        const container = document.getElementById("waypoints");
+        container.appendChild(createLegControl());
         const input = document.createElement("input");
         input.type = "text";
         input.placeholder = "Stop";
-        document.getElementById("waypoints").appendChild(input);
+        container.appendChild(input);
         updateAddStopState();
         input.focus();
       }
@@ -600,19 +687,43 @@
             return;
           }
 
-          const coords = waypoints
-            .map((c) => `${c[0]},${c[1]}`)
-            .join(";");
-          const dirRes = await fetch(
-            `https://api.mapbox.com/directions/v5/mapbox/driving/${coords}?geometries=geojson&access_token=${mapboxgl.accessToken}`,
-          ).then((r) => r.json());
+          const modes = getLegModes();
+          const routeCoords = [];
+          let routeDistanceMeters = 0;
 
-          if (!dirRes.routes?.length) {
-            errorEl.textContent = "No route found between these places.";
-            return;
+          for (let i = 0; i < waypoints.length - 1; i++) {
+            const a = waypoints[i];
+            const b = waypoints[i + 1];
+            const mode = modes[i] || "drive";
+
+            let segment;
+            if (mode === "fly") {
+              segment = [a, b];
+              routeDistanceMeters += turf.length(turf.lineString([a, b]), { units: "meters" });
+            } else {
+              const profile = mode === "walk" ? "walking" : "driving";
+              const coords = `${a[0]},${a[1]};${b[0]},${b[1]}`;
+              const dirRes = await fetch(
+                `https://api.mapbox.com/directions/v5/mapbox/${profile}/${coords}?geometries=geojson&access_token=${mapboxgl.accessToken}`,
+              ).then((r) => r.json());
+
+              if (!dirRes.routes?.length) {
+                segment = [a, b];
+                setLegMode(i, "fly");
+                routeDistanceMeters += turf.length(turf.lineString([a, b]), { units: "meters" });
+              } else {
+                segment = dirRes.routes[0].geometry.coordinates;
+                routeDistanceMeters += dirRes.routes[0].distance;
+              }
+            }
+
+            if (routeCoords.length > 0) {
+              routeCoords.pop();
+            }
+            routeCoords.push(...segment);
           }
 
-          const route = dirRes.routes[0].geometry.coordinates;
+          const route = routeCoords;
 
           if (map.getLayer("route")) map.removeLayer("route");
           if (map.getSource("route")) map.removeSource("route");
@@ -654,8 +765,6 @@
           document.getElementById("exportBtn").disabled = false;
 
           const numStops = queries.length;
-          const routeDistanceMeters = dirRes.routes[0].distance;
-
           const durationMs = 2000 + 2000 * numStops;
           document.getElementById("duration").value = Math.round(durationMs);
 
