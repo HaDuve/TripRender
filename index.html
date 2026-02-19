@@ -278,7 +278,7 @@
         </div>
         <div class="control-row">
           <label for="pitch">Pitch (°)</label>
-          <input type="number" id="pitch" value="50" min="0" max="85" />
+          <input type="number" id="pitch" value="20" min="0" max="85" />
         </div>
         <div class="control-row">
           <label for="exportSize">Export size</label>
@@ -653,9 +653,24 @@
           document.getElementById("animateBtn").disabled = false;
           document.getElementById("exportBtn").disabled = false;
 
+          const numStops = queries.length;
+          const routeDistanceMeters = dirRes.routes[0].distance;
+
+          const durationMs = 2000 + 2000 * numStops;
+          document.getElementById("duration").value = Math.round(durationMs);
+
+          const segmentLength = routeDistanceMeters / numStops;
+          const altitudeM = Math.round(
+            Math.max(
+              50000,
+              Math.min(2000000, segmentLength * 1.5)
+            )
+          );
+          document.getElementById("startAltitude").value = altitudeM;
+
           const bounds = new mapboxgl.LngLatBounds();
           route.forEach((c) => bounds.extend(c));
-          map.fitBounds(bounds, { padding: 50, pitch: 50, bearing: 0 });
+          map.fitBounds(bounds, { padding: 50, pitch: 20, bearing: 0 });
         } catch (err) {
           errorEl.textContent =
             "Error: " + (err.message || "Something went wrong");
@@ -676,7 +691,7 @@
               Number(document.getElementById("startBearing").value) || 0,
             startAltitude:
               Number(document.getElementById("startAltitude").value) || 500000,
-            pitch: Number(document.getElementById("pitch").value) || 50,
+            pitch: Number(document.getElementById("pitch").value) || 20,
             lineGradient: document.getElementById("lineGradient").checked,
             cameraFollow: document.getElementById("cameraFollow").checked,
             bearingChange: document.getElementById("bearingChange").checked,
@@ -757,7 +772,7 @@
               Number(document.getElementById("startBearing").value) || 0,
             startAltitude:
               Number(document.getElementById("startAltitude").value) || 500000,
-            pitch: Number(document.getElementById("pitch").value) || 50,
+            pitch: Number(document.getElementById("pitch").value) || 20,
             lineGradient: document.getElementById("lineGradient").checked,
             cameraFollow: document.getElementById("cameraFollow").checked,
             bearingChange: document.getElementById("bearingChange").checked,
