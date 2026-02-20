@@ -2194,7 +2194,9 @@
             fps: 60,
             kbps: 64000,
             rgbFlipY: true,
+            sequential: true,
           });
+          // sequential: true = moov atom before mdat (Apple/Safari requirement for playback and Save to Photos)
 
           const ptr = encoder.getRGBPointer();
 
