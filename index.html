@@ -2100,16 +2100,31 @@
             onRender: captureFrame,
           });
           const mp4 = encoder.end();
+          const file = new File([mp4], "route-animation.mp4", { type: "video/mp4" });
 
-          const a = document.createElement("a");
-          a.href = URL.createObjectURL(new Blob([mp4], { type: "video/mp4" }));
-          a.download = "route-animation.mp4";
-          a.click();
-          URL.revokeObjectURL(a.href);
-
-          setExportStatus(
-            "Done. Run ffmpeg -i route-animation.mp4 out.mp4 to compress."
-          );
+          const canShare = typeof navigator.share === "function" && navigator.canShare && navigator.canShare({ files: [file] });
+          if (canShare) {
+            try {
+              await navigator.share({ files: [file], title: "Route animation" });
+              setExportStatus("Saved via share sheet");
+            } catch (shareErr) {
+              if (shareErr.name !== "AbortError") {
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(new Blob([mp4], { type: "video/mp4" }));
+                a.download = "route-animation.mp4";
+                a.click();
+                URL.revokeObjectURL(a.href);
+                setExportStatus("Done. Run ffmpeg -i route-animation.mp4 out.mp4 to compress.");
+              }
+            }
+          } else {
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(new Blob([mp4], { type: "video/mp4" }));
+            a.download = "route-animation.mp4";
+            a.click();
+            URL.revokeObjectURL(a.href);
+            setExportStatus("Done. Run ffmpeg -i route-animation.mp4 out.mp4 to compress.");
+          }
         } catch (err) {
           setExportStatus("Error: " + (err.message || "Export failed"));
         } finally {
