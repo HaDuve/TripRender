@@ -2251,12 +2251,33 @@
           let didShare = false;
           if (typeof navigator.share === "function") {
             try {
-              await navigator.share({
+              var sharePromise = navigator.share({
                 files: [file],
                 title: "Route animation",
               });
-              didShare = true;
-              setExportStatus("Saved via share sheet");
+              var timeoutMs = isIOS ? 4000 : 0;
+              if (timeoutMs) {
+                try {
+                  await Promise.race([
+                    sharePromise,
+                    new Promise(function (_, reject) {
+                      setTimeout(function () { reject({ name: "Timeout" }); }, timeoutMs);
+                    }),
+                  ]);
+                } catch (raceErr) {
+                  if (raceErr.name === "Timeout") {
+                    didShare = true;
+                    setExportStatus("If you chose Save to Photos or Save to Files, check that app for the video.");
+                  }
+                  throw raceErr;
+                }
+              } else {
+                await sharePromise;
+              }
+              if (!didShare) {
+                didShare = true;
+                setExportStatus(isIOS ? "Check the Photos or Files app for the video." : "Saved via share sheet");
+              }
             } catch (shareErr) {
               if (shareErr.name !== "AbortError" && !isIOS) {
                 const blobUrl = URL.createObjectURL(downloadBlob);
@@ -2305,16 +2326,28 @@
                 const shareFile = new File([downloadBlob], "route-animation.mp4", {
                   type: "video/mp4",
                 });
+                var resolved = false;
+                function closeOverlay(successMsg) {
+                  if (resolved) return;
+                  resolved = true;
+                  wrap.remove();
+                  URL.revokeObjectURL(blobUrl);
+                  if (successMsg) setExportStatus(successMsg);
+                }
+                var t = setTimeout(function () {
+                  closeOverlay("If you chose Save to Photos or Save to Files, check that app for the video.");
+                }, 3000);
                 navigator.share({ files: [shareFile], title: "Route animation" }).then(
                   function () {
-                    wrap.remove();
-                    URL.revokeObjectURL(blobUrl);
-                    setExportStatus("Saved via share sheet");
+                    clearTimeout(t);
+                    closeOverlay("Check the Photos or Files app for the video.");
                   },
                   function (err) {
+                    clearTimeout(t);
                     if (err.name !== "AbortError") {
                       setExportStatus("Share failed: " + (err.message || err.name));
                     }
+                    closeOverlay();
                   }
                 );
               };
