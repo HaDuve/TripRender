@@ -2046,28 +2046,47 @@
           const gl = map.painter.context.gl;
           const glWidth = gl.drawingBufferWidth;
           const glHeight = gl.drawingBufferHeight;
+          const sizeMatches = glWidth === width && glHeight === height;
 
           const encoder = Encoder.create({
-            width: glWidth,
-            height: glHeight,
+            width,
+            height,
             fps: 60,
             kbps: 64000,
-            rgbFlipY: true,
+            rgbFlipY: sizeMatches,
           });
 
           const ptr = encoder.getRGBPointer();
+          let scaleCanvas = null;
+          let scaleCtx = null;
+          if (!sizeMatches) {
+            scaleCanvas = document.createElement("canvas");
+            scaleCanvas.width = width;
+            scaleCanvas.height = height;
+            scaleCtx = scaleCanvas.getContext("2d");
+          }
 
           const captureFrame = () => {
-            const pixels = encoder.memory().subarray(ptr);
-            gl.readPixels(
-              0,
-              0,
-              glWidth,
-              glHeight,
-              gl.RGBA,
-              gl.UNSIGNED_BYTE,
-              pixels,
-            );
+            if (sizeMatches) {
+              const pixels = encoder.memory().subarray(ptr);
+              gl.readPixels(
+                0,
+                0,
+                width,
+                height,
+                gl.RGBA,
+                gl.UNSIGNED_BYTE,
+                pixels,
+              );
+            } else {
+              scaleCtx.drawImage(
+                map.getCanvas(),
+                0, 0, glWidth, glHeight,
+                0, 0, width, height,
+              );
+              const imageData = scaleCtx.getImageData(0, 0, width, height);
+              encoder.memory().subarray(ptr, ptr + width * height * 4).set(imageData.data);
+            }
             encoder.encodeRGBPointer();
           };
 
@@ -2102,12 +2121,27 @@
           const mp4 = encoder.end();
           const file = new File([mp4], "route-animation.mp4", { type: "video/mp4" });
 
-          const canShare = typeof navigator.share === "function" && navigator.canShare && navigator.canShare({ files: [file] });
+          // #region agent log
+          const hasShare = typeof navigator.share === "function";
+          const canShareResult = hasShare && navigator.canShare ? navigator.canShare({ files: [file] }) : false;
+          fetch('http://127.0.0.1:7456/ingest/799bb255-c298-489a-95af-489e8f35e94b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f20319'},body:JSON.stringify({sessionId:'f20319',location:'index.html:exportVideo',message:'export after file create',data:{hasShare,canShareResult,fileSize:file.size,fileType:file.type,userAgent:(navigator.userAgent||'').substring(0,80)},hypothesisId:'H1',runId:'initial',timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
+
+          const canShare = hasShare && navigator.canShare && canShareResult;
           if (canShare) {
+            // #region agent log
+            fetch('http://127.0.0.1:7456/ingest/799bb255-c298-489a-95af-489e8f35e94b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f20319'},body:JSON.stringify({sessionId:'f20319',location:'index.html:exportVideo',message:'share branch',data:{},hypothesisId:'H3',runId:'initial',timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
             try {
               await navigator.share({ files: [file], title: "Route animation" });
+              // #region agent log
+              fetch('http://127.0.0.1:7456/ingest/799bb255-c298-489a-95af-489e8f35e94b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f20319'},body:JSON.stringify({sessionId:'f20319',location:'index.html:exportVideo',message:'share success',data:{},hypothesisId:'H5',runId:'initial',timestamp:Date.now()})}).catch(()=>{});
+              // #endregion
               setExportStatus("Saved via share sheet");
             } catch (shareErr) {
+              // #region agent log
+              fetch('http://127.0.0.1:7456/ingest/799bb255-c298-489a-95af-489e8f35e94b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f20319'},body:JSON.stringify({sessionId:'f20319',location:'index.html:exportVideo',message:'share error',data:{name:shareErr.name,message:(shareErr.message||'').substring(0,120)},hypothesisId:'H3',runId:'initial',timestamp:Date.now()})}).catch(()=>{});
+              // #endregion
               if (shareErr.name !== "AbortError") {
                 const a = document.createElement("a");
                 a.href = URL.createObjectURL(new Blob([mp4], { type: "video/mp4" }));
@@ -2118,12 +2152,50 @@
               }
             }
           } else {
-            const a = document.createElement("a");
-            a.href = URL.createObjectURL(new Blob([mp4], { type: "video/mp4" }));
-            a.download = "route-animation.mp4";
-            a.click();
-            URL.revokeObjectURL(a.href);
-            setExportStatus("Done. Run ffmpeg -i route-animation.mp4 out.mp4 to compress.");
+            // #region agent log
+            fetch('http://127.0.0.1:7456/ingest/799bb255-c298-489a-95af-489e8f35e94b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f20319'},body:JSON.stringify({sessionId:'f20319',location:'index.html:exportVideo',message:'fallback branch',data:{},hypothesisId:'H1',runId:'initial',timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
+            const blob = new Blob([mp4], { type: "video/mp4" });
+            const blobUrl = URL.createObjectURL(blob);
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            if (isIOS) {
+              setExportStatus("Long-press the video below, then tap Save Video to save to Photos.");
+              const wrap = document.createElement("div");
+              wrap.id = "iosSaveOverlay";
+              wrap.setAttribute("aria-hidden", "false");
+              wrap.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;padding:1rem;box-sizing:border-box;";
+              const vid = document.createElement("video");
+              vid.src = blobUrl;
+              vid.controls = true;
+              vid.playsInline = true;
+              vid.style.maxWidth = "100%";
+              vid.style.maxHeight = "60vh";
+              const msg = document.createElement("p");
+              msg.textContent = "Long-press the video, then tap \"Save Video\" to save to Photos.";
+              msg.style.color = "#fff";
+              msg.style.textAlign = "center";
+              msg.style.margin = "0";
+              const closeBtn = document.createElement("button");
+              closeBtn.type = "button";
+              closeBtn.textContent = "Close";
+              closeBtn.style.padding = "0.5rem 1rem";
+              closeBtn.onclick = function () {
+                wrap.remove();
+                URL.revokeObjectURL(blobUrl);
+                setExportStatus("");
+              };
+              wrap.appendChild(msg);
+              wrap.appendChild(vid);
+              wrap.appendChild(closeBtn);
+              document.body.appendChild(wrap);
+            } else {
+              const a = document.createElement("a");
+              a.href = blobUrl;
+              a.download = "route-animation.mp4";
+              a.click();
+              URL.revokeObjectURL(blobUrl);
+              setExportStatus("Done. Run ffmpeg -i route-animation.mp4 out.mp4 to compress.");
+            }
           }
         } catch (err) {
           setExportStatus("Error: " + (err.message || "Export failed"));
