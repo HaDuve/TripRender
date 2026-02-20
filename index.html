@@ -625,22 +625,31 @@
       let animationState = "idle"; // "idle" | "playing" | "paused"
       let animationControls = { stopRequested: false, pauseRequested: false };
       let exportInProgress = false;
+      let animationDirty = false;
 
       const ICON_PAUSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>';
       const ICON_PLAY = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
 
+      function setAnimationDirty() {
+        animationDirty = true;
+        updateAnimationUI();
+      }
+
       function updateAnimationUI() {
         const animateBtn = document.getElementById("animateBtn");
+        const exportBtn = document.getElementById("exportBtn");
         const strip = document.getElementById("animationStrip");
         const stripPauseBtn = document.getElementById("animationStripPause");
         const stopBtn = document.getElementById("stopBtn");
+        const buttonsDisabled = exportInProgress || !currentRoute || animationDirty;
+        if (exportBtn) exportBtn.disabled = buttonsDisabled;
         strip.classList.toggle("visible", animationState === "playing" || animationState === "paused");
         if (stripPauseBtn) {
           const isPlaying = animationState === "playing";
           stripPauseBtn.innerHTML = isPlaying ? ICON_PAUSE : ICON_PLAY;
           stripPauseBtn.setAttribute("aria-label", isPlaying ? "Pause" : "Continue");
         }
-        if (exportInProgress || !currentRoute) {
+        if (buttonsDisabled) {
           animateBtn.disabled = true;
           if (stopBtn) stopBtn.disabled = true;
           animateBtn.textContent = "Animate Route";
@@ -874,14 +883,32 @@
         cb.addEventListener("change", () => {
           document.body.classList.toggle("manual-leg-durations", cb.checked);
           if (cb.checked) syncManualLegDurationsFromRoute();
+          setAnimationDirty();
         });
         document.getElementById("waypoints").addEventListener("input", (e) => {
           if (!e.target.classList.contains("leg-duration-input")) return;
           syncDurationFromLegInputs();
+          setAnimationDirty();
         });
         document.getElementById("waypoints").addEventListener("change", (e) => {
           if (!e.target.classList.contains("leg-duration-input")) return;
           syncDurationFromLegInputs();
+          setAnimationDirty();
+        });
+      })();
+
+      (function initAnimationTimingListeners() {
+        ["duration", "maxTimePerStep", "speedup"].forEach((id) => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          el.addEventListener("change", setAnimationDirty);
+          el.addEventListener("input", setAnimationDirty);
+        });
+      })();
+
+      (function initLegModeDirtyListener() {
+        document.getElementById("waypoints").addEventListener("change", (e) => {
+          if (e.target.classList.contains("leg-mode")) setAnimationDirty();
         });
       })();
 
@@ -1244,6 +1271,7 @@
         if (legToRemove?.classList?.contains("leg-control")) legToRemove.remove();
         row.remove();
         updateAddStopState();
+        setAnimationDirty();
         document.getElementById("waypoints").dispatchEvent(new CustomEvent("waypoint-row-removed"));
       }
 
@@ -1303,6 +1331,7 @@
         container.appendChild(createLegControl());
         container.appendChild(createWaypointRow("Stop"));
         updateAddStopState();
+        setAnimationDirty();
         container.querySelector(".waypoint-row:last-of-type input").focus();
       }
 
@@ -1559,7 +1588,6 @@
           if (map.getSource("route")) map.removeSource("route");
           currentRoute = null;
           updateAnimationUI();
-          document.getElementById("exportBtn").disabled = true;
 
           map.addSource("route", {
             type: "geojson",
@@ -1592,7 +1620,7 @@
             geometry: { type: "LineString", coordinates: route },
             properties: { legEndProgress, legLengths },
           };
-          document.getElementById("exportBtn").disabled = false;
+          animationDirty = false;
           updateAnimationUI();
 
           const numStops = queries.length;
