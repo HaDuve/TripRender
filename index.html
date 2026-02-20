@@ -21,6 +21,7 @@
         --error-color: #c00;
         --btn-bg: #3b9dd2;
         --btn-hover: #2d8bc0;
+        --touch-min: 44px;
       }
       body.night-mode {
         --panel-bg: #1a1a1a;
@@ -36,8 +37,18 @@
       * {
         box-sizing: border-box;
       }
+      html {
+        height: 100%;
+        width: 100%;
+        overflow: hidden;
+        margin: 0;
+      }
       body {
         margin: 0;
+        height: 100%;
+        width: 100%;
+        overflow: hidden;
+        position: relative;
         font-family: system-ui, sans-serif;
       }
       #panelWrapper {
@@ -173,8 +184,8 @@
         fill: currentColor;
       }
       #map {
-        width: 100vw;
-        height: 100vh;
+        width: 100%;
+        height: 100%;
       }
       input,
       button {
@@ -295,6 +306,11 @@
         border: 1px solid var(--input-border);
         border-radius: 6px;
       }
+      #exportSize {
+        min-width: 140px;
+        margin: 0 0 0 auto;
+        padding: 6px;
+      }
       #waypoints {
         display: flex;
         flex-direction: column;
@@ -406,6 +422,120 @@
       }
       #waypoint-suggestions .waypoint-suggestion-item:hover {
         background: var(--input-bg);
+      }
+      #mapBackdrop {
+        display: none;
+      }
+
+      /* Tablet: 600–899px */
+      @media (min-width: 600px) and (max-width: 899px) {
+        #panelWrapper #input {
+          min-width: 400px;
+        }
+      }
+
+      /* Phone: <600px — bottom sheet, single column, strip at bottom */
+      @media (max-width: 599px) {
+        #panelWrapper #input {
+          position: fixed;
+          bottom: 0;
+          left: 50%;
+          right: auto;
+          top: 15vh;
+          width: 90%;
+          min-width: 0;
+          max-width: 400px;
+          border-radius: 8px 8px 0 0;
+          box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.15);
+          transform: translate(-50%, 100%);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+        }
+        #panelWrapper.panel-open #input {
+          transform: translate(-50%, 0);
+        }
+        .panel-columns {
+          flex-direction: column;
+          min-height: 0;
+          align-items: center;
+          width: 100%;
+        }
+        .panel-col {
+          align-items: center;
+          max-width: 100%;
+        }
+        .panel-col-route #addStopBtn,
+        .panel-col-actions button,
+        .draw-route-wrap {
+          max-width: none;
+        }
+        input,
+        button {
+          width: 100%;
+          max-width: 100%;
+        }
+        .waypoint-row {
+          max-width: 100%;
+        }
+        .waypoint-row input {
+          max-width: none;
+        }
+        #error {
+          max-width: 100%;
+        }
+        #animationControls.expanded {
+          max-height: 50vh;
+        }
+        #waypoint-suggestions {
+          max-width: calc(100vw - 24px);
+        }
+        .control-row,
+        .leg-control {
+          font-size: 12px;
+        }
+        .control-row select,
+        #exportSize {
+          min-width: 0;
+          max-width: 100%;
+        }
+        /* Animation strip at bottom, horizontal, centered */
+        #animationStrip {
+          top: auto;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          flex-direction: row;
+          justify-content: center;
+        }
+        #animationStrip button {
+          border-right: 1px solid var(--input-border);
+          border-top: none;
+        }
+        #animationStrip button:first-of-type {
+          border-radius: 8px 0 0 0;
+          box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.2);
+        }
+        #animationStrip button:last-of-type {
+          border-radius: 0 8px 0 0;
+          box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.2);
+        }
+        #mapBackdrop {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          height: 15vh;
+          z-index: 9;
+        }
+      }
+
+      /* Desktop: ≥900px — side panel; action column buttons stay 220px */
+      @media (min-width: 900px) {
+        .panel-col-actions button,
+        .draw-route-wrap {
+          max-width: 220px;
+        }
       }
     </style>
   </head>
@@ -550,10 +680,7 @@
           </div>
           <div class="control-row">
             <label for="exportSize">Export size</label>
-            <select
-              id="exportSize"
-              style="min-width: 140px; margin: 0 0 0 auto; padding: 6px"
-            >
+            <select id="exportSize">
               <optgroup label="Portrait">
                 <option value="1080x1920">9:16 (Reels/Shorts)</option>
                 <option value="1080x1350">4:5 (IG portrait)</option>
@@ -573,6 +700,7 @@
         </div>
       </div>
     </div>
+    <div id="mapBackdrop" aria-hidden="true"></div>
     <div id="animationStrip">
       <button type="button" id="animationStripPause" onclick="animateRoute()" aria-label="Pause">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>
@@ -798,6 +926,20 @@
         try {
           localStorage.setItem("panelOpen", open ? "1" : "0");
         } catch (_) {}
+        syncMapBackdrop();
+      }
+
+      function syncMapBackdrop() {
+        const backdrop = document.getElementById("mapBackdrop");
+        const wrapper = document.getElementById("panelWrapper");
+        if (!backdrop || !wrapper) return;
+        if (window.innerWidth >= 600) {
+          backdrop.style.display = "none";
+        } else {
+          backdrop.style.display = wrapper.classList.contains("panel-open")
+            ? "block"
+            : "none";
+        }
       }
 
       (function initPanelState() {
@@ -807,7 +949,17 @@
           document
             .getElementById("panelWrapper")
             .classList.toggle("panel-open", open);
+          syncMapBackdrop();
         } catch (_) {}
+      })();
+
+      (function initMapBackdropClick() {
+        const backdrop = document.getElementById("mapBackdrop");
+        if (!backdrop) return;
+        backdrop.addEventListener("click", function () {
+          setPanelOpen(false);
+        });
+        window.addEventListener("resize", syncMapBackdrop);
       })();
 
       function togglePanel() {
