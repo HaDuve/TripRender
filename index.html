@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Route Finder</title>
     <script src="https://api.mapbox.com/mapbox-gl-js/v3.18.1/mapbox-gl-dev.js"></script>
     <link
@@ -67,9 +67,8 @@
         margin: 0;
         background: var(--panel-bg);
         color: var(--panel-text);
-        border: none;
-        border-right: 1px solid var(--input-border);
-        border-radius: 0 8px 8px 0;
+        border: 1px solid var(--input-border);
+        border-radius: 8px;
         box-shadow: 2px 0 12px rgba(0, 0, 0, 0.2);
         cursor: pointer;
         display: flex;
@@ -436,15 +435,25 @@
 
       /* Phone: <600px — bottom sheet, single column, strip at bottom */
       @media (max-width: 599px) {
+        #panelWrapper {
+          width: 100%;
+          justify-content: center;
+          padding-top: max(8px, env(safe-area-inset-top, 0));
+        }
+        #panelWrapper #panelToggle {
+          min-height: 48px;
+        }
         #panelWrapper #input {
           position: fixed;
           bottom: 0;
           left: 50%;
           right: auto;
-          top: 15vh;
-          width: 90%;
+          top: 12vh;
+          width: 92%;
           min-width: 0;
           max-width: 400px;
+          padding: 8px;
+          padding-bottom: 56px;
           border-radius: 8px 8px 0 0;
           box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.15);
           transform: translate(-50%, 100%);
@@ -460,10 +469,12 @@
           min-height: 0;
           align-items: center;
           width: 100%;
+          gap: 4px;
         }
         .panel-col {
           align-items: center;
           max-width: 100%;
+          gap: 4px;
         }
         .panel-col-route #addStopBtn,
         .panel-col-actions button,
@@ -474,30 +485,48 @@
         button {
           width: 100%;
           max-width: 100%;
+          padding: 10px 12px;
+          margin: 2px 0;
         }
         .waypoint-row {
           max-width: 100%;
+          margin: 2px 0;
         }
         .waypoint-row input {
           max-width: none;
+        }
+        .waypoint-row .leg-delete-btn {
+          width: 44px;
+          min-width: 44px;
+          height: 44px;
+          min-height: 44px;
+          flex-shrink: 0;
         }
         #error {
           max-width: 100%;
         }
         #animationControls.expanded {
-          max-height: 50vh;
+          max-height: 45vh;
         }
         #waypoint-suggestions {
-          max-width: calc(100vw - 24px);
+          max-width: calc(100vw - 16px);
+        }
+        #waypoint-suggestions .waypoint-suggestion-item {
+          min-height: 44px;
+          padding: 10px 12px;
         }
         .control-row,
         .leg-control {
           font-size: 12px;
+          margin: 4px 0;
         }
         .control-row select,
         #exportSize {
           min-width: 0;
           max-width: 100%;
+        }
+        .control-toggle {
+          margin: 6px 0 2px;
         }
         /* Animation strip at bottom, horizontal, centered */
         #animationStrip {
@@ -509,6 +538,10 @@
           justify-content: center;
         }
         #animationStrip button {
+          min-width: 48px;
+          min-height: 48px;
+          width: 48px;
+          height: 48px;
           border-right: 1px solid var(--input-border);
           border-top: none;
         }
@@ -525,7 +558,7 @@
           top: 0;
           left: 0;
           right: 0;
-          height: 15vh;
+          height: 12vh;
           z-index: 9;
         }
       }
