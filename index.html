@@ -358,6 +358,34 @@
       #addStopBtn:hover:not(:disabled) {
         background: var(--input-bg);
       }
+      #waypoint-suggestions {
+        display: none;
+        position: fixed;
+        z-index: 100;
+        max-height: 220px;
+        overflow-y: auto;
+        background: var(--panel-bg);
+        color: var(--panel-text);
+        border: 1px solid var(--input-border);
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      }
+      #waypoint-suggestions.visible {
+        display: block;
+      }
+      #waypoint-suggestions .waypoint-suggestion-item {
+        padding: 8px 12px;
+        cursor: pointer;
+        font-size: 14px;
+        border: none;
+        background: none;
+        color: inherit;
+        width: 100%;
+        text-align: left;
+      }
+      #waypoint-suggestions .waypoint-suggestion-item:hover {
+        background: var(--input-bg);
+      }
     </style>
   </head>
   <body>
@@ -393,6 +421,7 @@
                 <button type="button" class="leg-delete-btn" aria-label="Clear or remove" onclick="deleteOrClearWaypoint(this)">×</button>
               </div>
             </div>
+            <div id="waypoint-suggestions" role="listbox" aria-hidden="true"></div>
             <button id="addStopBtn" type="button" onclick="addWaypoint()">
               Add stop
             </button>
@@ -1123,6 +1152,124 @@
         updateAddStopState();
         container.querySelector(".waypoint-row:last-of-type input").focus();
       }
+
+      (function initWaypointSuggestions() {
+        const SUGGEST_DEBOUNCE_MS = 250;
+        const MIN_QUERY_LENGTH = 2;
+        const SUGGEST_LIMIT = 5;
+
+        const dropdown = document.getElementById("waypoint-suggestions");
+        let suggestTimeout = null;
+        let activeSuggestInput = null;
+
+        function hideSuggestions() {
+          if (suggestTimeout) {
+            clearTimeout(suggestTimeout);
+            suggestTimeout = null;
+          }
+          dropdown.classList.remove("visible");
+          dropdown.setAttribute("aria-hidden", "true");
+          dropdown.innerHTML = "";
+          activeSuggestInput = null;
+        }
+
+        function positionDropdownUnderInput(inputEl) {
+          const rect = inputEl.getBoundingClientRect();
+          dropdown.style.top = rect.bottom + "px";
+          dropdown.style.left = rect.left + "px";
+          dropdown.style.width = Math.max(rect.width, 260) + "px";
+        }
+
+        function showSuggestions(inputEl, features) {
+          if (!inputEl || !features.length) {
+            hideSuggestions();
+            return;
+          }
+          activeSuggestInput = inputEl;
+          positionDropdownUnderInput(inputEl);
+          dropdown.innerHTML = "";
+          features.forEach((f) => {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "waypoint-suggestion-item";
+            btn.textContent = f.place_name;
+            btn.setAttribute("data-place-name", f.place_name);
+            dropdown.appendChild(btn);
+          });
+          dropdown.classList.add("visible");
+          dropdown.setAttribute("aria-hidden", "false");
+        }
+
+        function fetchSuggestions(query) {
+          const url =
+            "https://api.mapbox.com/geocoding/v5/mapbox.places/" +
+            encodeURIComponent(query) +
+            ".json?access_token=" +
+            mapboxgl.accessToken +
+            "&limit=" +
+            SUGGEST_LIMIT;
+          return fetch(url).then((r) => r.json());
+        }
+
+        function runSuggest(inputEl) {
+          const q = inputEl.value.trim();
+          if (q.length < MIN_QUERY_LENGTH) {
+            hideSuggestions();
+            return;
+          }
+          fetchSuggestions(q).then((data) => {
+            const features = data.features || [];
+            if (activeSuggestInput === inputEl) {
+              showSuggestions(inputEl, features);
+            }
+          }).catch(() => {
+            if (activeSuggestInput === inputEl) hideSuggestions();
+          });
+        }
+
+        document.getElementById("waypoints").addEventListener("focusin", (e) => {
+          const input = e.target.closest ? e.target.closest(".waypoint-row input") : null;
+          if (input && input.type === "text") activeSuggestInput = input;
+        });
+
+        document.getElementById("waypoints").addEventListener("focusout", (e) => {
+          const input = e.target.closest ? e.target.closest(".waypoint-row input") : null;
+          if (!input) return;
+          setTimeout(() => {
+            if (document.activeElement !== input && !dropdown.contains(document.activeElement)) {
+              hideSuggestions();
+            }
+          }, 150);
+        });
+
+        document.getElementById("waypoints").addEventListener("input", (e) => {
+          const input = e.target.closest ? e.target.closest(".waypoint-row input") : null;
+          if (!input || input.type !== "text") return;
+          if (suggestTimeout) clearTimeout(suggestTimeout);
+          suggestTimeout = setTimeout(() => runSuggest(input), SUGGEST_DEBOUNCE_MS);
+        });
+
+        document.getElementById("waypoints").addEventListener("keydown", (e) => {
+          const input = e.target.closest ? e.target.closest(".waypoint-row input") : null;
+          if (!input) return;
+          if (e.key === "Escape") {
+            hideSuggestions();
+            suggestTimeout && clearTimeout(suggestTimeout);
+            suggestTimeout = null;
+          }
+        });
+
+        dropdown.addEventListener("click", (e) => {
+          const item = e.target.closest(".waypoint-suggestion-item");
+          if (!item || !activeSuggestInput) return;
+          const placeName = item.getAttribute("data-place-name");
+          if (placeName) {
+            activeSuggestInput.value = placeName;
+            activeSuggestInput.focus();
+          }
+          hideSuggestions();
+        });
+      })();
 
       async function getRoute() {
         const errorEl = document.getElementById("error");
