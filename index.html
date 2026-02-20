@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
     <title>Route Finder</title>
     <script src="https://api.mapbox.com/mapbox-gl-js/v3.18.1/mapbox-gl-dev.js"></script>
     <link
@@ -98,16 +101,25 @@
         border-radius: 0 8px 8px 0;
         box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
         transform: translateX(calc(-100% - 44px));
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        transition:
+          transform 0.2s ease,
+          box-shadow 0.2s ease;
       }
       #panelWrapper #input.panel-shadow-top {
-        box-shadow: inset 0 10px 14px -8px rgba(0, 0, 0, 0.2), 2px 0 8px rgba(0, 0, 0, 0.15);
+        box-shadow:
+          inset 0 10px 14px -8px rgba(0, 0, 0, 0.2),
+          2px 0 8px rgba(0, 0, 0, 0.15);
       }
       #panelWrapper #input.panel-shadow-bottom {
-        box-shadow: inset 0 -10px 14px -8px rgba(0, 0, 0, 0.2), 2px 0 8px rgba(0, 0, 0, 0.15);
+        box-shadow:
+          inset 0 -10px 14px -8px rgba(0, 0, 0, 0.2),
+          2px 0 8px rgba(0, 0, 0, 0.15);
       }
       #panelWrapper #input.panel-shadow-top.panel-shadow-bottom {
-        box-shadow: inset 0 10px 14px -8px rgba(0, 0, 0, 0.2), inset 0 -10px 14px -8px rgba(0, 0, 0, 0.2), 2px 0 8px rgba(0, 0, 0, 0.15);
+        box-shadow:
+          inset 0 10px 14px -8px rgba(0, 0, 0, 0.2),
+          inset 0 -10px 14px -8px rgba(0, 0, 0, 0.2),
+          2px 0 8px rgba(0, 0, 0, 0.15);
       }
       .panel-columns {
         display: flex;
@@ -285,7 +297,9 @@
         animation: draw-route-spin 0.8s linear infinite;
       }
       @keyframes draw-route-spin {
-        to { transform: rotate(360deg); }
+        to {
+          transform: rotate(360deg);
+        }
       }
       #error {
         color: var(--error-color);
@@ -508,16 +522,25 @@
           display: flex;
           flex-direction: column;
           align-items: center;
-          transition: transform 0.2s ease, box-shadow 0.2s ease;
+          transition:
+            transform 0.2s ease,
+            box-shadow 0.2s ease;
         }
         #panelWrapper #input.panel-shadow-top {
-          box-shadow: inset 0 10px 14px -8px rgba(0, 0, 0, 0.2), 0 -2px 8px rgba(0, 0, 0, 0.15);
+          box-shadow:
+            inset 0 10px 14px -8px rgba(0, 0, 0, 0.2),
+            0 -2px 8px rgba(0, 0, 0, 0.15);
         }
         #panelWrapper #input.panel-shadow-bottom {
-          box-shadow: inset 0 -10px 14px -8px rgba(0, 0, 0, 0.2), 0 -2px 8px rgba(0, 0, 0, 0.15);
+          box-shadow:
+            inset 0 -10px 14px -8px rgba(0, 0, 0, 0.2),
+            0 -2px 8px rgba(0, 0, 0, 0.15);
         }
         #panelWrapper #input.panel-shadow-top.panel-shadow-bottom {
-          box-shadow: inset 0 10px 14px -8px rgba(0, 0, 0, 0.2), inset 0 -10px 14px -8px rgba(0, 0, 0, 0.2), 0 -2px 8px rgba(0, 0, 0, 0.15);
+          box-shadow:
+            inset 0 10px 14px -8px rgba(0, 0, 0, 0.2),
+            inset 0 -10px 14px -8px rgba(0, 0, 0, 0.2),
+            0 -2px 8px rgba(0, 0, 0, 0.15);
         }
         #panelWrapper.panel-open #input {
           transform: translate(-50%, 0);
@@ -641,7 +664,14 @@
             <div id="waypoints">
               <div class="waypoint-row">
                 <input type="text" placeholder="Start" value="New York, NY" />
-                <button type="button" class="leg-delete-btn" aria-label="Clear or remove" onclick="deleteOrClearWaypoint(this)">×</button>
+                <button
+                  type="button"
+                  class="leg-delete-btn"
+                  aria-label="Clear or remove"
+                  onclick="deleteOrClearWaypoint(this)"
+                >
+                  ×
+                </button>
               </div>
               <div class="leg-control control-row">
                 <label>To next:</label>
@@ -652,15 +682,31 @@
                 </select>
                 <span class="leg-duration-wrap">
                   <label>Duration (s)</label>
-                  <input type="number" class="leg-duration-input" min="0.1" step="0.1" />
+                  <input
+                    type="number"
+                    class="leg-duration-input"
+                    min="0.1"
+                    step="0.1"
+                  />
                 </span>
               </div>
               <div class="waypoint-row">
                 <input type="text" placeholder="End" value="Boston, MA" />
-                <button type="button" class="leg-delete-btn" aria-label="Clear or remove" onclick="deleteOrClearWaypoint(this)">×</button>
+                <button
+                  type="button"
+                  class="leg-delete-btn"
+                  aria-label="Clear or remove"
+                  onclick="deleteOrClearWaypoint(this)"
+                >
+                  ×
+                </button>
               </div>
             </div>
-            <div id="waypoint-suggestions" role="listbox" aria-hidden="true"></div>
+            <div
+              id="waypoint-suggestions"
+              role="listbox"
+              aria-hidden="true"
+            ></div>
             <button id="addStopBtn" type="button" onclick="addWaypoint()">
               Add stop
             </button>
@@ -691,93 +737,95 @@
               Animation controls
             </div>
             <div id="animationControls">
-          <div class="control-row">
-            <input type="checkbox" id="lineGradient" checked />
-            <label for="lineGradient">Line gradient</label>
-          </div>
-          <div class="control-row">
-            <input type="checkbox" id="cameraFollow" checked />
-            <label for="cameraFollow">Camera follow</label>
-          </div>
-          <div class="control-row">
-            <input type="checkbox" id="bearingChange" />
-            <label for="bearingChange">Bearing change</label>
-          </div>
-          <div class="control-row">
-            <input type="checkbox" id="editDurationsManually" />
-            <label for="editDurationsManually">Edit durations manually</label>
-          </div>
-          <div class="control-row">
-            <label for="duration">Duration (s)</label>
-            <input
-              type="number"
-              id="duration"
-              value="2"
-              min="0.1"
-              step="0.1"
-            />
-          </div>
-          <div class="control-row">
-            <label for="maxTimePerStep">Max time per step (s)</label>
-            <input
-              type="number"
-              id="maxTimePerStep"
-              value="2"
-              min="0.1"
-              step="0.1"
-            />
-          </div>
-          <div class="control-row">
-            <label for="speedup">Max speedup (1–4)</label>
-            <input
-              type="number"
-              id="speedup"
-              value="4"
-              min="1"
-              max="4"
-              step="1"
-            />
-          </div>
-          <div class="control-row">
-            <label for="startBearing">Bearing (°)</label>
-            <input
-              type="number"
-              id="startBearing"
-              value="0"
-              min="-180"
-              max="180"
-            />
-          </div>
-          <div class="control-row">
-            <label for="startAltitude">Altitude (m)</label>
-            <input
-              type="number"
-              id="startAltitude"
-              value="500000"
-              min="100"
-              step="100"
-            />
-          </div>
-          <div class="control-row">
-            <label for="pitch">Pitch (°)</label>
-            <input type="number" id="pitch" value="20" min="0" max="85" />
-          </div>
-          <div class="control-row">
-            <label for="exportSize">Export size</label>
-            <select id="exportSize">
-              <optgroup label="Portrait">
-                <option value="1080x1920">9:16 (Reels/Shorts)</option>
-                <option value="1080x1350">4:5 (IG portrait)</option>
-              </optgroup>
-              <optgroup label="Landscape">
-                <option value="1920x1080">16:9 (1080p)</option>
-                <option value="1280x720">16:9 (720p)</option>
-              </optgroup>
-              <optgroup label="Square">
-                <option value="1080x1080">1:1</option>
-              </optgroup>
-            </select>
-          </div>
+              <div class="control-row">
+                <input type="checkbox" id="lineGradient" checked />
+                <label for="lineGradient">Line gradient</label>
+              </div>
+              <div class="control-row">
+                <input type="checkbox" id="cameraFollow" checked />
+                <label for="cameraFollow">Camera follow</label>
+              </div>
+              <div class="control-row">
+                <input type="checkbox" id="bearingChange" />
+                <label for="bearingChange">Bearing change</label>
+              </div>
+              <div class="control-row">
+                <input type="checkbox" id="editDurationsManually" />
+                <label for="editDurationsManually"
+                  >Edit durations manually</label
+                >
+              </div>
+              <div class="control-row">
+                <label for="duration">Duration (s)</label>
+                <input
+                  type="number"
+                  id="duration"
+                  value="2"
+                  min="0.1"
+                  step="0.1"
+                />
+              </div>
+              <div class="control-row">
+                <label for="maxTimePerStep">Max time per step (s)</label>
+                <input
+                  type="number"
+                  id="maxTimePerStep"
+                  value="2"
+                  min="0.1"
+                  step="0.1"
+                />
+              </div>
+              <div class="control-row">
+                <label for="speedup">Max speedup (1–4)</label>
+                <input
+                  type="number"
+                  id="speedup"
+                  value="4"
+                  min="1"
+                  max="4"
+                  step="1"
+                />
+              </div>
+              <div class="control-row">
+                <label for="startBearing">Bearing (°)</label>
+                <input
+                  type="number"
+                  id="startBearing"
+                  value="0"
+                  min="-180"
+                  max="180"
+                />
+              </div>
+              <div class="control-row">
+                <label for="startAltitude">Altitude (m)</label>
+                <input
+                  type="number"
+                  id="startAltitude"
+                  value="500000"
+                  min="100"
+                  step="100"
+                />
+              </div>
+              <div class="control-row">
+                <label for="pitch">Pitch (°)</label>
+                <input type="number" id="pitch" value="20" min="0" max="85" />
+              </div>
+              <div class="control-row">
+                <label for="exportSize">Export size</label>
+                <select id="exportSize">
+                  <optgroup label="Portrait">
+                    <option value="1080x1920">9:16 (Reels/Shorts)</option>
+                    <option value="1080x1350">4:5 (IG portrait)</option>
+                  </optgroup>
+                  <optgroup label="Landscape">
+                    <option value="1920x1080">16:9 (1080p)</option>
+                    <option value="1280x720">16:9 (720p)</option>
+                  </optgroup>
+                  <optgroup label="Square">
+                    <option value="1080x1080">1:1</option>
+                  </optgroup>
+                </select>
+              </div>
             </div>
             <div id="exportStatus"></div>
           </div>
@@ -786,17 +834,40 @@
     </div>
     <div id="mapBackdrop" aria-hidden="true"></div>
     <div id="animationStrip">
-      <button type="button" id="animationStripPause" onclick="animateRoute()" aria-label="Pause">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>
+      <button
+        type="button"
+        id="animationStripPause"
+        onclick="animateRoute()"
+        aria-label="Pause"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
+        </svg>
       </button>
-      <button type="button" id="stopBtn" onclick="stopAnimation()" aria-label="Stop">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h12v12H6z"/></svg>
+      <button
+        type="button"
+        id="stopBtn"
+        onclick="stopAnimation()"
+        aria-label="Stop"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 6h12v12H6z" />
+        </svg>
       </button>
-      <button type="button" id="animationStripExport" onclick="exportVideo()" aria-label="Export video">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+      <button
+        type="button"
+        id="animationStripExport"
+        onclick="exportVideo()"
+        aria-label="Export video"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
+        </svg>
       </button>
     </div>
-    <div id="exportOverlay" class="export-overlay" aria-hidden="true"><span class="spinner"></span><span id="exportOverlayStatus"></span></div>
+    <div id="exportOverlay" class="export-overlay" aria-hidden="true">
+      <span class="spinner"></span><span id="exportOverlayStatus"></span>
+    </div>
     <div id="mapWrapper"><div id="map"></div></div>
 
     <script>
@@ -843,8 +914,10 @@
       let exportInProgress = false;
       let animationDirty = false;
 
-      const ICON_PAUSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>';
-      const ICON_PLAY = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+      const ICON_PAUSE =
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>';
+      const ICON_PLAY =
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
 
       function setAnimationDirty() {
         animationDirty = true;
@@ -867,15 +940,21 @@
         const stripPauseBtn = document.getElementById("animationStripPause");
         const stopBtn = document.getElementById("stopBtn");
         const stripExportBtn = document.getElementById("animationStripExport");
-        const buttonsDisabled = exportInProgress || !currentRoute || animationDirty;
+        const buttonsDisabled =
+          exportInProgress || !currentRoute || animationDirty;
         if (exportBtn) exportBtn.disabled = buttonsDisabled;
         if (stripExportBtn) stripExportBtn.disabled = buttonsDisabled;
-        const panelOpen = document.getElementById("panelWrapper").classList.contains("panel-open");
+        const panelOpen = document
+          .getElementById("panelWrapper")
+          .classList.contains("panel-open");
         strip.classList.toggle("visible", !panelOpen && !!currentRoute);
         if (stripPauseBtn) {
           const isPlaying = animationState === "playing";
           stripPauseBtn.innerHTML = isPlaying ? ICON_PAUSE : ICON_PLAY;
-          stripPauseBtn.setAttribute("aria-label", isPlaying ? "Pause" : "Continue");
+          stripPauseBtn.setAttribute(
+            "aria-label",
+            isPlaying ? "Pause" : "Continue",
+          );
         }
         if (buttonsDisabled) {
           animateBtn.disabled = true;
@@ -889,7 +968,8 @@
           if (stopBtn) stopBtn.disabled = true;
         } else {
           animateBtn.disabled = false;
-          animateBtn.textContent = animationState === "playing" ? "Pause" : "Continue";
+          animateBtn.textContent =
+            animationState === "playing" ? "Pause" : "Continue";
           if (stopBtn) stopBtn.disabled = false;
         }
       }
@@ -1069,9 +1149,13 @@
         function updateScrollShadow() {
           const scrollable = input.scrollHeight > input.clientHeight;
           const atTop = input.scrollTop <= 0;
-          const atBottom = input.scrollTop + input.clientHeight >= input.scrollHeight;
+          const atBottom =
+            input.scrollTop + input.clientHeight >= input.scrollHeight;
           input.classList.toggle("panel-shadow-top", scrollable && !atTop);
-          input.classList.toggle("panel-shadow-bottom", scrollable && !atBottom);
+          input.classList.toggle(
+            "panel-shadow-bottom",
+            scrollable && !atBottom,
+          );
         }
         input.addEventListener("scroll", updateScrollShadow);
         window.addEventListener("resize", updateScrollShadow);
@@ -1098,7 +1182,9 @@
       const MAX_LEG_DURATION_MS = 60000;
 
       function syncDurationFromLegInputs() {
-        const inputs = document.querySelectorAll("#waypoints .leg-duration-input");
+        const inputs = document.querySelectorAll(
+          "#waypoints .leg-duration-input",
+        );
         if (!inputs.length) return;
         const values = Array.from(inputs).map((el) => {
           let v = Number(el.value) || MIN_LEG_DURATION_S;
@@ -1110,24 +1196,24 @@
         const durationEl = document.getElementById("duration");
         const maxTimeEl = document.getElementById("maxTimePerStep");
         if (durationEl) durationEl.value = Math.round(sum * 10) / 10;
-        if (maxTimeEl) maxTimeEl.value = Math.round(Math.max(...values) * 10) / 10;
+        if (maxTimeEl)
+          maxTimeEl.value = Math.round(Math.max(...values) * 10) / 10;
       }
 
       function syncManualLegDurationsFromRoute() {
-        const inputs = document.querySelectorAll("#waypoints .leg-duration-input");
+        const inputs = document.querySelectorAll(
+          "#waypoints .leg-duration-input",
+        );
         const numLegs = inputs.length;
         if (!numLegs) return;
         if (currentRoute?.properties?.legLengths) {
           const legLengths = currentRoute.properties.legLengths;
           const maxTimePerStepMs =
-            (Number(document.getElementById("maxTimePerStep")?.value) || 2) * 1000;
+            (Number(document.getElementById("maxTimePerStep")?.value) || 2) *
+            1000;
           const speedup =
             Number(document.getElementById("speedup")?.value) || 4;
-          const durs = getLegDurations(
-            legLengths,
-            maxTimePerStepMs,
-            speedup,
-          );
+          const durs = getLegDurations(legLengths, maxTimePerStepMs, speedup);
           if (durs && durs.length === numLegs) {
             inputs.forEach((el, i) => {
               el.value = Math.round((durs[i] / 1000) * 10) / 10;
@@ -1191,7 +1277,10 @@
         if (inputs.length !== expectedLength) return null;
         const values = Array.from(inputs).map((el) => {
           const v = (Number(el.value) || MIN_LEG_DURATION_S) * 1000;
-          return Math.max(MIN_LEG_DURATION_MS, Math.min(MAX_LEG_DURATION_MS, v));
+          return Math.max(
+            MIN_LEG_DURATION_MS,
+            Math.min(MAX_LEG_DURATION_MS, v),
+          );
         });
         return values;
       }
@@ -1201,13 +1290,10 @@
         const safeSpeedup = Math.max(1, Number(speedup) || 1);
         const safeMax = Math.max(0, Number(maxTimePerStep) || 2000);
         const maxLegLength = Math.max(...legLengths, 0);
-        if (maxLegLength === 0)
-          return legLengths.map(() => safeMax);
+        if (maxLegLength === 0) return legLengths.map(() => safeMax);
         const minDur = safeMax / safeSpeedup;
         const range = safeMax - minDur;
-        return legLengths.map(
-          (len) => minDur + range * (len / maxLegLength),
-        );
+        return legLengths.map((len) => minDur + range * (len / maxLegLength));
       }
 
       function timeToProgress(
@@ -1224,9 +1310,7 @@
         const legDurations =
           overrideLegDurations &&
           overrideLegDurations.length === numLegs &&
-          overrideLegDurations.every(
-            (d) => Number.isFinite(d) && d > 0,
-          )
+          overrideLegDurations.every((d) => Number.isFinite(d) && d > 0)
             ? overrideLegDurations
             : getLegDurations(legLengths, maxTimePerStep, speedup);
         const totalDuration = legDurations
@@ -1251,9 +1335,10 @@
         }
         const legDur = durs[legIndex];
         const tInLeg =
-          legDur <= 0 || !Number.isFinite(legDur) ? 1 : (elapsedMs - cum) / legDur;
-        const progressStart =
-          legIndex === 0 ? 0 : legEndProgress[legIndex - 1];
+          legDur <= 0 || !Number.isFinite(legDur)
+            ? 1
+            : (elapsedMs - cum) / legDur;
+        const progressStart = legIndex === 0 ? 0 : legEndProgress[legIndex - 1];
         const progressEnd = legEndProgress[legIndex];
         return progressStart + tInLeg * (progressEnd - progressStart);
       }
@@ -1295,8 +1380,16 @@
           const CAMERA_LAG = 0.22;
           if (_previousCameraTarget) {
             targetPosition = {
-              lng: lerp(_previousCameraTarget.lng, targetPosition.lng, CAMERA_LAG),
-              lat: lerp(_previousCameraTarget.lat, targetPosition.lat, CAMERA_LAG),
+              lng: lerp(
+                _previousCameraTarget.lng,
+                targetPosition.lng,
+                CAMERA_LAG,
+              ),
+              lat: lerp(
+                _previousCameraTarget.lat,
+                targetPosition.lat,
+                CAMERA_LAG,
+              ),
             };
           }
           _previousCameraTarget = targetPosition;
@@ -1536,14 +1629,19 @@
           setAnimationDirty();
           return;
         }
-        const legToRemove = row.previousElementSibling?.classList?.contains("leg-control")
+        const legToRemove = row.previousElementSibling?.classList?.contains(
+          "leg-control",
+        )
           ? row.previousElementSibling
           : row.nextElementSibling;
-        if (legToRemove?.classList?.contains("leg-control")) legToRemove.remove();
+        if (legToRemove?.classList?.contains("leg-control"))
+          legToRemove.remove();
         row.remove();
         updateAddStopState();
         setAnimationDirty();
-        document.getElementById("waypoints").dispatchEvent(new CustomEvent("waypoint-row-removed"));
+        document
+          .getElementById("waypoints")
+          .dispatchEvent(new CustomEvent("waypoint-row-removed"));
       }
 
       function createLegControl() {
@@ -1569,8 +1667,7 @@
         durInput.className = "leg-duration-input";
         durInput.min = 0.1;
         durInput.step = 0.1;
-        durInput.value =
-          document.getElementById("maxTimePerStep")?.value || 2;
+        durInput.value = document.getElementById("maxTimePerStep")?.value || 2;
         wrap.appendChild(durLabel);
         wrap.appendChild(durInput);
         div.appendChild(label);
@@ -1590,7 +1687,9 @@
         deleteBtn.className = "leg-delete-btn";
         deleteBtn.setAttribute("aria-label", "Clear or remove");
         deleteBtn.textContent = "×";
-        deleteBtn.onclick = function () { deleteOrClearWaypoint(this); };
+        deleteBtn.onclick = function () {
+          deleteOrClearWaypoint(this);
+        };
         row.appendChild(input);
         row.appendChild(deleteBtn);
         return row;
@@ -1633,9 +1732,11 @@
         function positionDropdownUnderInput(inputEl) {
           const rect = inputEl.getBoundingClientRect();
           const panelEl = document.getElementById("input");
-          const panelRect = panelEl ? panelEl.getBoundingClientRect() : { top: 0, left: 0 };
-          dropdown.style.top = (rect.bottom - panelRect.top) + "px";
-          dropdown.style.left = (rect.left - panelRect.left) + "px";
+          const panelRect = panelEl
+            ? panelEl.getBoundingClientRect()
+            : { top: 0, left: 0 };
+          dropdown.style.top = rect.bottom - panelRect.top + "px";
+          dropdown.style.left = rect.left - panelRect.left + "px";
           dropdown.style.width = Math.max(rect.width, 260) + "px";
         }
 
@@ -1680,70 +1781,100 @@
             hideSuggestions();
             return;
           }
-          fetchSuggestions(q).then((data) => {
-            const features = data.features || [];
-            if (!isInputValid(activeSuggestInput)) {
-              activeSuggestInput = null;
-              hideSuggestions();
-              return;
-            }
-            if (activeSuggestInput === inputEl) {
-              showSuggestions(inputEl, features);
-            }
-          }).catch(() => {
-            if (!isInputValid(activeSuggestInput)) {
-              activeSuggestInput = null;
-              hideSuggestions();
-              return;
-            }
-            if (activeSuggestInput === inputEl) hideSuggestions();
-          });
+          fetchSuggestions(q)
+            .then((data) => {
+              const features = data.features || [];
+              if (!isInputValid(activeSuggestInput)) {
+                activeSuggestInput = null;
+                hideSuggestions();
+                return;
+              }
+              if (activeSuggestInput === inputEl) {
+                showSuggestions(inputEl, features);
+              }
+            })
+            .catch(() => {
+              if (!isInputValid(activeSuggestInput)) {
+                activeSuggestInput = null;
+                hideSuggestions();
+                return;
+              }
+              if (activeSuggestInput === inputEl) hideSuggestions();
+            });
         }
 
-        document.getElementById("waypoints").addEventListener("focusin", (e) => {
-          const input = e.target.closest ? e.target.closest(".waypoint-row input") : null;
-          if (input && input.type === "text") {
-            activeSuggestInput = input;
-          }
-        });
-
-        document.getElementById("waypoints").addEventListener("focusout", (e) => {
-          const input = e.target.closest ? e.target.closest(".waypoint-row input") : null;
-          if (!input) return;
-          setTimeout(() => {
-            const activeEl = document.activeElement;
-            const activeIsWaypoint = activeEl && activeEl.closest && activeEl.closest("#waypoints") && activeEl.closest(".waypoint-row") && activeEl.type === "text";
-            if (activeEl !== input && !dropdown.contains(activeEl) && !activeIsWaypoint) {
-              hideSuggestions();
+        document
+          .getElementById("waypoints")
+          .addEventListener("focusin", (e) => {
+            const input = e.target.closest
+              ? e.target.closest(".waypoint-row input")
+              : null;
+            if (input && input.type === "text") {
+              activeSuggestInput = input;
             }
-          }, 150);
-        });
+          });
+
+        document
+          .getElementById("waypoints")
+          .addEventListener("focusout", (e) => {
+            const input = e.target.closest
+              ? e.target.closest(".waypoint-row input")
+              : null;
+            if (!input) return;
+            setTimeout(() => {
+              const activeEl = document.activeElement;
+              const activeIsWaypoint =
+                activeEl &&
+                activeEl.closest &&
+                activeEl.closest("#waypoints") &&
+                activeEl.closest(".waypoint-row") &&
+                activeEl.type === "text";
+              if (
+                activeEl !== input &&
+                !dropdown.contains(activeEl) &&
+                !activeIsWaypoint
+              ) {
+                hideSuggestions();
+              }
+            }, 150);
+          });
 
         document.getElementById("waypoints").addEventListener("input", (e) => {
-          const input = e.target.closest ? e.target.closest(".waypoint-row input") : null;
+          const input = e.target.closest
+            ? e.target.closest(".waypoint-row input")
+            : null;
           if (!input || input.type !== "text") return;
           activeSuggestInput = input;
           if (suggestTimeout) clearTimeout(suggestTimeout);
-          suggestTimeout = setTimeout(() => runSuggest(input), SUGGEST_DEBOUNCE_MS);
+          suggestTimeout = setTimeout(
+            () => runSuggest(input),
+            SUGGEST_DEBOUNCE_MS,
+          );
         });
 
-        document.getElementById("waypoints").addEventListener("keydown", (e) => {
-          const input = e.target.closest ? e.target.closest(".waypoint-row input") : null;
-          if (!input) return;
-          if (e.key === "Escape") {
+        document
+          .getElementById("waypoints")
+          .addEventListener("keydown", (e) => {
+            const input = e.target.closest
+              ? e.target.closest(".waypoint-row input")
+              : null;
+            if (!input) return;
+            if (e.key === "Escape") {
+              hideSuggestions();
+              suggestTimeout && clearTimeout(suggestTimeout);
+              suggestTimeout = null;
+            }
+          });
+
+        document
+          .getElementById("waypoints")
+          .addEventListener("waypoint-row-removed", () => {
+            if (suggestTimeout) {
+              clearTimeout(suggestTimeout);
+              suggestTimeout = null;
+            }
             hideSuggestions();
-            suggestTimeout && clearTimeout(suggestTimeout);
-            suggestTimeout = null;
-          }
-        });
-
-        document.getElementById("waypoints").addEventListener("waypoint-row-removed", () => {
-          if (suggestTimeout) {
-            clearTimeout(suggestTimeout);
-            suggestTimeout = null;
-          }
-          hideSuggestions();
-        });
+          });
 
         dropdown.addEventListener("click", (e) => {
           const item = e.target.closest(".waypoint-suggestion-item");
@@ -1849,10 +1980,10 @@
           const legEndProgress =
             totalPathKm <= 0
               ? [1]
-              : legLengths.map((_, i) =>
-                  legLengths
-                    .slice(0, i + 1)
-                    .reduce((a, b) => a + b, 0) / totalPathKm,
+              : legLengths.map(
+                  (_, i) =>
+                    legLengths.slice(0, i + 1).reduce((a, b) => a + b, 0) /
+                    totalPathKm,
                 );
 
           if (map.getLayer("route")) map.removeLayer("route");
@@ -1897,7 +2028,8 @@
 
           const numStops = queries.length;
           const maxTimePerStepMs =
-            (Number(document.getElementById("maxTimePerStep").value) || 2) * 1000;
+            (Number(document.getElementById("maxTimePerStep").value) || 2) *
+            1000;
           const speedup =
             Number(document.getElementById("speedup")?.value) || 4;
           const legDurationsForDuration = getLegDurations(
@@ -1908,7 +2040,8 @@
           const durationMs = legDurationsForDuration
             ? legDurationsForDuration.reduce((a, b) => a + b, 0)
             : (numStops - 1) * maxTimePerStepMs;
-          document.getElementById("duration").value = Math.round((durationMs / 1000) * 10) / 10;
+          document.getElementById("duration").value =
+            Math.round((durationMs / 1000) * 10) / 10;
           if (document.getElementById("editDurationsManually")?.checked) {
             const legInputs = document.querySelectorAll(
               "#waypoints .leg-duration-input",
@@ -1918,14 +2051,17 @@
               legDurationsForDuration.length === legInputs.length
             ) {
               legInputs.forEach((el, i) => {
-                el.value = Math.round((legDurationsForDuration[i] / 1000) * 10) / 10;
+                el.value =
+                  Math.round((legDurationsForDuration[i] / 1000) * 10) / 10;
               });
-              document.getElementById("duration").value = Math.round(
-                (legDurationsForDuration.reduce((a, b) => a + b, 0) / 1000 * 10),
-              ) / 10;
-              document.getElementById("maxTimePerStep").value = Math.round(
-                (Math.max(...legDurationsForDuration) / 1000) * 10,
-              ) / 10;
+              document.getElementById("duration").value =
+                Math.round(
+                  (legDurationsForDuration.reduce((a, b) => a + b, 0) / 1000) *
+                    10,
+                ) / 10;
+              document.getElementById("maxTimePerStep").value =
+                Math.round((Math.max(...legDurationsForDuration) / 1000) * 10) /
+                10;
             }
           }
 
@@ -1967,8 +2103,9 @@
         animationControls.pauseRequested = false;
         updateAnimationUI();
         try {
-          const legEndProgress =
-            currentRoute?.properties?.legEndProgress ?? [1];
+          const legEndProgress = currentRoute?.properties?.legEndProgress ?? [
+            1,
+          ];
           const manualDurations = getManualLegDurationsForAnimation(
             legEndProgress.length,
           );
@@ -1976,7 +2113,8 @@
             map,
             path: currentRoute,
             maxTimePerStep:
-              (Number(document.getElementById("maxTimePerStep").value) || 2) * 1000,
+              (Number(document.getElementById("maxTimePerStep").value) || 2) *
+              1000,
             speedup: Number(document.getElementById("speedup")?.value) || 4,
             manualLegDurations: manualDurations ?? undefined,
             startBearing:
@@ -2037,7 +2175,10 @@
           mapEl.style.height = height + "px";
           map.resize();
 
-          const scale = Math.min(window.innerWidth / width, window.innerHeight / height);
+          const scale = Math.min(
+            window.innerWidth / width,
+            window.innerHeight / height,
+          );
           mapEl.style.transform = "scale(" + scale + ")";
           mapEl.style.transformOrigin = "center center";
 
@@ -2046,54 +2187,35 @@
           const gl = map.painter.context.gl;
           const glWidth = gl.drawingBufferWidth;
           const glHeight = gl.drawingBufferHeight;
-          const sizeMatches = glWidth === width && glHeight === height;
 
           const encoder = Encoder.create({
-            width,
-            height,
+            width: glWidth,
+            height: glHeight,
             fps: 60,
             kbps: 64000,
-            rgbFlipY: sizeMatches,
+            rgbFlipY: true,
           });
 
           const ptr = encoder.getRGBPointer();
-          let scaleCanvas = null;
-          let scaleCtx = null;
-          if (!sizeMatches) {
-            scaleCanvas = document.createElement("canvas");
-            scaleCanvas.width = width;
-            scaleCanvas.height = height;
-            scaleCtx = scaleCanvas.getContext("2d");
-          }
 
           const captureFrame = () => {
-            if (sizeMatches) {
-              const pixels = encoder.memory().subarray(ptr);
-              gl.readPixels(
-                0,
-                0,
-                width,
-                height,
-                gl.RGBA,
-                gl.UNSIGNED_BYTE,
-                pixels,
-              );
-            } else {
-              scaleCtx.drawImage(
-                map.getCanvas(),
-                0, 0, glWidth, glHeight,
-                0, 0, width, height,
-              );
-              const imageData = scaleCtx.getImageData(0, 0, width, height);
-              encoder.memory().subarray(ptr, ptr + width * height * 4).set(imageData.data);
-            }
+            const pixels = encoder.memory().subarray(ptr);
+            gl.readPixels(
+              0,
+              0,
+              glWidth,
+              glHeight,
+              gl.RGBA,
+              gl.UNSIGNED_BYTE,
+              pixels,
+            );
             encoder.encodeRGBPointer();
           };
 
           setExportStatus("Exporting...");
 
-          const legEndProgressExport =
-            currentRoute?.properties?.legEndProgress ?? [1];
+          const legEndProgressExport = currentRoute?.properties
+            ?.legEndProgress ?? [1];
           const manualDurationsExport = getManualLegDurationsForAnimation(
             legEndProgressExport.length,
           );
@@ -2101,7 +2223,8 @@
             map,
             path: currentRoute,
             maxTimePerStep:
-              (Number(document.getElementById("maxTimePerStep").value) || 2) * 1000,
+              (Number(document.getElementById("maxTimePerStep").value) || 2) *
+              1000,
             speedup: Number(document.getElementById("speedup")?.value) || 4,
             manualLegDurations: manualDurationsExport ?? undefined,
             startBearing:
@@ -2119,62 +2242,89 @@
             onRender: captureFrame,
           });
           const mp4 = encoder.end();
-          const file = new File([mp4], "route-animation.mp4", { type: "video/mp4" });
+          const file = new File([mp4], "route-animation.mp4", {
+            type: "video/mp4",
+          });
+          const downloadBlob = new Blob([mp4], { type: "video/mp4" });
 
-          // #region agent log
-          const hasShare = typeof navigator.share === "function";
-          const canShareResult = hasShare && navigator.canShare ? navigator.canShare({ files: [file] }) : false;
-          fetch('http://127.0.0.1:7456/ingest/799bb255-c298-489a-95af-489e8f35e94b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f20319'},body:JSON.stringify({sessionId:'f20319',location:'index.html:exportVideo',message:'export after file create',data:{hasShare,canShareResult,fileSize:file.size,fileType:file.type,userAgent:(navigator.userAgent||'').substring(0,80)},hypothesisId:'H1',runId:'initial',timestamp:Date.now()})}).catch(()=>{});
-          // #endregion
-
-          const canShare = hasShare && navigator.canShare && canShareResult;
-          if (canShare) {
-            // #region agent log
-            fetch('http://127.0.0.1:7456/ingest/799bb255-c298-489a-95af-489e8f35e94b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f20319'},body:JSON.stringify({sessionId:'f20319',location:'index.html:exportVideo',message:'share branch',data:{},hypothesisId:'H3',runId:'initial',timestamp:Date.now()})}).catch(()=>{});
-            // #endregion
+          const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+          let didShare = false;
+          if (typeof navigator.share === "function") {
             try {
-              await navigator.share({ files: [file], title: "Route animation" });
-              // #region agent log
-              fetch('http://127.0.0.1:7456/ingest/799bb255-c298-489a-95af-489e8f35e94b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f20319'},body:JSON.stringify({sessionId:'f20319',location:'index.html:exportVideo',message:'share success',data:{},hypothesisId:'H5',runId:'initial',timestamp:Date.now()})}).catch(()=>{});
-              // #endregion
+              await navigator.share({
+                files: [file],
+                title: "Route animation",
+              });
+              didShare = true;
               setExportStatus("Saved via share sheet");
             } catch (shareErr) {
-              // #region agent log
-              fetch('http://127.0.0.1:7456/ingest/799bb255-c298-489a-95af-489e8f35e94b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f20319'},body:JSON.stringify({sessionId:'f20319',location:'index.html:exportVideo',message:'share error',data:{name:shareErr.name,message:(shareErr.message||'').substring(0,120)},hypothesisId:'H3',runId:'initial',timestamp:Date.now()})}).catch(()=>{});
-              // #endregion
-              if (shareErr.name !== "AbortError") {
+              if (shareErr.name !== "AbortError" && !isIOS) {
+                const blobUrl = URL.createObjectURL(downloadBlob);
                 const a = document.createElement("a");
-                a.href = URL.createObjectURL(new Blob([mp4], { type: "video/mp4" }));
+                a.href = blobUrl;
                 a.download = "route-animation.mp4";
                 a.click();
-                URL.revokeObjectURL(a.href);
-                setExportStatus("Done. Run ffmpeg -i route-animation.mp4 out.mp4 to compress.");
+                setTimeout(function () {
+                  URL.revokeObjectURL(blobUrl);
+                }, 1000);
+                setExportStatus(
+                  "Done. Run ffmpeg -i route-animation.mp4 out.mp4 to compress.",
+                );
               }
             }
-          } else {
-            // #region agent log
-            fetch('http://127.0.0.1:7456/ingest/799bb255-c298-489a-95af-489e8f35e94b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f20319'},body:JSON.stringify({sessionId:'f20319',location:'index.html:exportVideo',message:'fallback branch',data:{},hypothesisId:'H1',runId:'initial',timestamp:Date.now()})}).catch(()=>{});
-            // #endregion
-            const blob = new Blob([mp4], { type: "video/mp4" });
-            const blobUrl = URL.createObjectURL(blob);
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+          }
+          if (!didShare) {
+            const blobUrl = URL.createObjectURL(downloadBlob);
             if (isIOS) {
-              setExportStatus("Long-press the video below, then tap Save Video to save to Photos.");
+              setExportStatus(
+                "Use \"Share again\" and choose Save to Photos or Save to Files.",
+              );
               const wrap = document.createElement("div");
               wrap.id = "iosSaveOverlay";
               wrap.setAttribute("aria-hidden", "false");
-              wrap.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;padding:1rem;box-sizing:border-box;";
-              const vid = document.createElement("video");
-              vid.src = blobUrl;
-              vid.controls = true;
-              vid.playsInline = true;
-              vid.style.maxWidth = "100%";
-              vid.style.maxHeight = "60vh";
+              wrap.style.cssText =
+                "position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;padding:1rem;box-sizing:border-box;";
               const msg = document.createElement("p");
-              msg.textContent = "Long-press the video, then tap \"Save Video\" to save to Photos.";
               msg.style.color = "#fff";
               msg.style.textAlign = "center";
               msg.style.margin = "0";
+              msg.style.maxWidth = "320px";
+              if (typeof navigator.share === "function") {
+                msg.textContent =
+                  "To save to Photos: tap \"Share again\" and choose Save to Photos or Save to Files. (Long-press on the video does not work.)";
+              } else {
+                msg.textContent =
+                  "Saving to Photos only works in Safari. Open this page in Safari (and use HTTPS), then export again and use the share sheet.";
+              }
+              const shareAgainBtn = document.createElement("button");
+              shareAgainBtn.type = "button";
+              shareAgainBtn.textContent = "Share again";
+              shareAgainBtn.style.padding = "0.75rem 1.5rem";
+              shareAgainBtn.style.fontSize = "1.1rem";
+              shareAgainBtn.onclick = function () {
+                const shareFile = new File([downloadBlob], "route-animation.mp4", {
+                  type: "video/mp4",
+                });
+                navigator.share({ files: [shareFile], title: "Route animation" }).then(
+                  function () {
+                    wrap.remove();
+                    URL.revokeObjectURL(blobUrl);
+                    setExportStatus("Saved via share sheet");
+                  },
+                  function (err) {
+                    if (err.name !== "AbortError") {
+                      setExportStatus("Share failed: " + (err.message || err.name));
+                    }
+                  }
+                );
+              };
+              const link = document.createElement("a");
+              link.href = blobUrl;
+              link.target = "_blank";
+              link.rel = "noopener";
+              link.textContent = "Open video (view only)";
+              link.style.color = "#6bf";
+              link.style.fontSize = "1rem";
               const closeBtn = document.createElement("button");
               closeBtn.type = "button";
               closeBtn.textContent = "Close";
@@ -2185,7 +2335,10 @@
                 setExportStatus("");
               };
               wrap.appendChild(msg);
-              wrap.appendChild(vid);
+              if (typeof navigator.share === "function") {
+                wrap.appendChild(shareAgainBtn);
+              }
+              wrap.appendChild(link);
               wrap.appendChild(closeBtn);
               document.body.appendChild(wrap);
             } else {
@@ -2193,8 +2346,12 @@
               a.href = blobUrl;
               a.download = "route-animation.mp4";
               a.click();
-              URL.revokeObjectURL(blobUrl);
-              setExportStatus("Done. Run ffmpeg -i route-animation.mp4 out.mp4 to compress.");
+              setTimeout(function () {
+                URL.revokeObjectURL(blobUrl);
+              }, 1000);
+              setExportStatus(
+                "Done. Run ffmpeg -i route-animation.mp4 out.mp4 to compress.",
+              );
             }
           }
         } catch (err) {
@@ -2202,7 +2359,9 @@
         } finally {
           document.body.classList.remove("exporting");
           if (exportOverlay) exportOverlay.classList.remove("visible");
-          const overlayStatusEl = document.getElementById("exportOverlayStatus");
+          const overlayStatusEl = document.getElementById(
+            "exportOverlayStatus",
+          );
           if (overlayStatusEl) overlayStatusEl.textContent = "";
           mapEl.style.width = savedWidth;
           mapEl.style.height = savedHeight;
@@ -2215,7 +2374,6 @@
           setPanelOpen(true);
         }
       }
-
     </script>
   </body>
 </html>
