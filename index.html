@@ -139,9 +139,9 @@
         left: 0;
         z-index: 10;
         flex-direction: column;
-        gap: 4px;
+        gap: 8px;
         padding: 0;
-        margin: 0;
+        margin: 12px;
       }
       #animationStrip.visible {
         display: flex;
@@ -156,19 +156,12 @@
         background: var(--btn-bg);
         color: white;
         border: none;
-        border-right: 1px solid var(--input-border);
+        border-radius: 8px;
+        box-shadow: 2px 0 12px rgba(0, 0, 0, 0.2);
         cursor: pointer;
         display: flex;
         align-items: center;
         justify-content: center;
-      }
-      #animationStrip button:first-of-type {
-        border-radius: 0;
-        box-shadow: 2px 0 12px rgba(0, 0, 0, 0.2);
-      }
-      #animationStrip button:last-of-type {
-        border-radius: 0 8px 8px 0;
-        box-shadow: 2px 0 12px rgba(0, 0, 0, 0.2);
       }
       #animationStrip button:hover {
         background: var(--btn-hover);
@@ -536,21 +529,14 @@
           right: 0;
           flex-direction: row;
           justify-content: center;
+          margin: 12px;
         }
         #animationStrip button {
           min-width: 48px;
           min-height: 48px;
           width: 48px;
           height: 48px;
-          border-right: 1px solid var(--input-border);
-          border-top: none;
-        }
-        #animationStrip button:first-of-type {
-          border-radius: 8px 0 0 0;
-          box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.2);
-        }
-        #animationStrip button:last-of-type {
-          border-radius: 0 8px 0 0;
+          border-radius: 8px;
           box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.2);
         }
         #mapBackdrop {
@@ -741,6 +727,9 @@
       <button type="button" id="stopBtn" onclick="stopAnimation()" aria-label="Stop">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h12v12H6z"/></svg>
       </button>
+      <button type="button" id="animationStripExport" onclick="exportVideo()" aria-label="Export video">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+      </button>
     </div>
     <div id="map"></div>
 
@@ -793,18 +782,30 @@
 
       function setAnimationDirty() {
         animationDirty = true;
+        if (currentRoute) {
+          if (map.getLayer("route")) map.removeLayer("route");
+          if (map.getSource("route")) map.removeSource("route");
+          currentRoute = null;
+        }
         updateAnimationUI();
       }
 
       function updateAnimationUI() {
+        if (!currentRoute) {
+          if (map.getLayer("route")) map.removeLayer("route");
+          if (map.getSource("route")) map.removeSource("route");
+        }
         const animateBtn = document.getElementById("animateBtn");
         const exportBtn = document.getElementById("exportBtn");
         const strip = document.getElementById("animationStrip");
         const stripPauseBtn = document.getElementById("animationStripPause");
         const stopBtn = document.getElementById("stopBtn");
+        const stripExportBtn = document.getElementById("animationStripExport");
         const buttonsDisabled = exportInProgress || !currentRoute || animationDirty;
         if (exportBtn) exportBtn.disabled = buttonsDisabled;
-        strip.classList.toggle("visible", animationState === "playing" || animationState === "paused");
+        if (stripExportBtn) stripExportBtn.disabled = buttonsDisabled;
+        const panelOpen = document.getElementById("panelWrapper").classList.contains("panel-open");
+        strip.classList.toggle("visible", !panelOpen && !!currentRoute);
         if (stripPauseBtn) {
           const isPlaying = animationState === "playing";
           stripPauseBtn.innerHTML = isPlaying ? ICON_PAUSE : ICON_PLAY;
@@ -960,6 +961,7 @@
           localStorage.setItem("panelOpen", open ? "1" : "0");
         } catch (_) {}
         syncMapBackdrop();
+        updateAnimationUI();
       }
 
       function syncMapBackdrop() {
@@ -1448,6 +1450,7 @@
         const numWaypoints = getWaypointInputs().length;
         if (numWaypoints <= 2) {
           input.value = "";
+          setAnimationDirty();
           return;
         }
         const legToRemove = row.previousElementSibling?.classList?.contains("leg-control")
@@ -1807,6 +1810,7 @@
           };
           animationDirty = false;
           updateAnimationUI();
+          setPanelOpen(false);
 
           const numStops = queries.length;
           const maxTimePerStepMs =
