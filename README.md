@@ -92,11 +92,15 @@ One-step **build + upload** (reads `.env` for API keys; `.env` stays gitignored 
 npm run build:submit:ios
 ```
 
+This runs **`npm run build:web`** first (refreshes `dist/`), then the Node pipeline (`scripts/ios-submit-pipeline.js`). **`tauri ios build`** also runs **`beforeBuildCommand`** (`build:web` again), so the web bundle may be produced twice in one submit — that is expected. If you run **`node scripts/ios-submit-pipeline.js`** directly, run **`npm run build:web`** yourself first.
+
+The pipeline passes **`--build-number`** to `tauri ios build` (see `tauri ios build --help`) so **CFBundleVersion** changes; [Tauri’s App Store doc](https://v2.tauri.app/distribute/app-store/) ties that to `version` / optional `bundle.iOS.bundleVersion`. A gitignored **`.ios-build-number`** stores the **last successful upload** (updated only after `altool` succeeds, so failed uploads can be retried with the same number). Seed if needed: `echo 42 > .ios-build-number`.
+
 Put `APPLE_API_KEY_ID` and `APPLE_API_ISSUER` in `.env` and keep `AuthKey_<KEY_ID>.p8` under `~/private_keys/` per [Tauri authentication](https://v2.tauri.app/distribute/app-store/#authentication).
 
 IPA: `src-tauri/gen/apple/build/arm64/TripRender.ipa`. Manual upload: `xcrun altool` per the [Tauri App Store guide](https://v2.tauri.app/distribute/app-store/). **Xcode Cloud:** custom scripts live in [`src-tauri/gen/apple/ci_scripts/`](src-tauri/gen/apple/ci_scripts/) (same folder as `app.xcodeproj`, per [Apple](https://developer.apple.com/documentation/xcode/writing-custom-build-scripts)). Tune the workflow as follows:
 
-- **Environment:** add `APPLE_API_KEY_ID` and `APPLE_API_ISSUER` (and install the `.p8` key where `altool` expects it — see [Tauri App Store / Authentication](https://v2.tauri.app/distribute/app-store/)). Optional: `CI=true` if your tooling needs it; avoid numeric `CI=1` for the Tauri CLI (`ci_pre_xcodebuild.sh` clears `CI` for the `node … ios build` step).
+- **Environment:** for upload, `APPLE_API_KEY_ID` (or `APPLE_API_KEY`) and `APPLE_API_ISSUER`, plus the `.p8` in `~/private_keys/` — see [Tauri App Store / Authentication](https://v2.tauri.app/distribute/app-store/). For **`tauri ios build --ci`**, Tauri also requires **`APPLE_API_KEY_PATH`** ([iOS code signing](https://v2.tauri.app/distribute/sign/ios/)); local **`npm run build:submit:ios`** does **not** use `--ci`, so Xcode automatic signing is enough. Avoid numeric `CI=1` with the Tauri CLI (`ci_pre_xcodebuild.sh` clears `CI`).
 - **Actions (Pattern 1):** `ci_pre_xcodebuild.sh` runs the full `tauri ios build` (Strategy A). If the workflow also runs a separate **Archive** action, you may compile twice — remove the redundant archive step or accept the duplicate work ([workflow actions](https://developer.apple.com/documentation/Xcode/Configuring-Your-Xcode-Cloud-Workflow-s-Actions)).
 - **Variables:** `CI_PRIMARY_REPOSITORY_PATH` and `CI_XCODEBUILD_ACTION` are set by Xcode Cloud ([reference](https://developer.apple.com/documentation/xcode/environment-variable-reference)).
 

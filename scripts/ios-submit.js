@@ -23,49 +23,66 @@ function readProductName() {
   return name;
 }
 
-const keyId = process.env.APPLE_API_KEY_ID;
-const issuer = process.env.APPLE_API_ISSUER;
+/**
+ * @param {{ exitProcess?: boolean }} [opts] exitProcess defaults true for CLI use
+ * @returns {number} exit code (0 = success)
+ */
+function uploadIpaToAsc(opts = {}) {
+  const exitProcess = opts.exitProcess !== false;
 
-if (!keyId || !issuer) {
-  console.error(
-    "Missing APPLE_API_KEY_ID or APPLE_API_ISSUER. Add them to .env (gitignored) — see .env.example"
+  const keyId = process.env.APPLE_API_KEY_ID || process.env.APPLE_API_KEY;
+  const issuer = process.env.APPLE_API_ISSUER;
+
+  if (!keyId || !issuer) {
+    console.error(
+      "Missing APPLE_API_KEY_ID (or APPLE_API_KEY) or APPLE_API_ISSUER. Add them to .env — see .env.example"
+    );
+    if (exitProcess) process.exit(1);
+    return 1;
+  }
+
+  const productName = readProductName();
+  const ipa = path.join(
+    root,
+    "src-tauri",
+    "gen",
+    "apple",
+    "build",
+    "arm64",
+    `${productName}.ipa`
   );
-  process.exit(1);
+
+  if (!fs.existsSync(ipa)) {
+    console.error(`IPA not found: ${ipa}\nRun: npm run tauri:ios:release`);
+    if (exitProcess) process.exit(1);
+    return 1;
+  }
+
+  const r = spawnSync(
+    "xcrun",
+    [
+      "altool",
+      "--upload-app",
+      "--type",
+      "ios",
+      "--file",
+      ipa,
+      "--apiKey",
+      keyId,
+      "--apiIssuer",
+      issuer,
+    ],
+    { stdio: "inherit", env: process.env }
+  );
+
+  const code =
+    r.status !== null && r.status !== undefined ? r.status : 1;
+  if (exitProcess) process.exit(code);
+  return code;
 }
 
-const productName = readProductName();
-const ipa = path.join(
-  root,
-  "src-tauri",
-  "gen",
-  "apple",
-  "build",
-  "arm64",
-  `${productName}.ipa`
-);
+module.exports = { uploadIpaToAsc };
 
-if (!fs.existsSync(ipa)) {
-  console.error(`IPA not found: ${ipa}\nRun: npm run tauri:ios:release`);
-  process.exit(1);
+if (require.main === module) {
+  uploadIpaToAsc();
 }
-
-const r = spawnSync(
-  "xcrun",
-  [
-    "altool",
-    "--upload-app",
-    "--type",
-    "ios",
-    "--file",
-    ipa,
-    "--apiKey",
-    keyId,
-    "--apiIssuer",
-    issuer,
-  ],
-  { stdio: "inherit", env: process.env }
-);
-
-process.exit(
-  r.status !== null && r.status !== undefined ? r.status : 1
-);

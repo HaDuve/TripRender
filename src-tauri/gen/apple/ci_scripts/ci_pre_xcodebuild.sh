@@ -17,5 +17,7 @@ case "${CI_XCODEBUILD_ACTION:-}" in
 esac
 
 npm run build:web
-# CI=1 breaks `tauri ios build --ci` (CLI expects --ci true/false). Xcode Cloud may set CI=1.
-env -u CI node scripts/tauri-with-rustup.js ios build --export-method app-store-connect --ci
+# Do not use `ios build --ci` here unless you set APPLE_API_KEY, APPLE_API_ISSUER, APPLE_API_KEY_PATH
+# (see https://v2.tauri.app/distribute/sign/ios/). Xcode Cloud signing uses the workflow’s team/profiles.
+# CI=1 breaks `--ci` parsing; strip CI for the CLI.
+env -u CI node scripts/tauri-with-rustup.js ios build --export-method app-store-connect

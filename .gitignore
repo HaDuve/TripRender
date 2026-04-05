@@ -1,4 +1,5 @@
 dist/
 .env
+.ios-build-number
 node_modules/
 .DS_Store
