@@ -3,6 +3,11 @@
  * Prepends rustup's bin dir to PATH so `cargo`/`rustc` come from rustup
  * (avoids older Homebrew Rust breaking Tauri builds).
  * Invokes the local CLI via `node …/tauri.js` (no shell) so device names like "iPhone 16" stay one argument.
+ *
+ * iOS / Xcode: `tauri ios xcode-script` reconnects to the WebSocket opened by `tauri ios dev` and
+ * reapplies CLI options from that session (`read_options` → set_var), including PATH. If you change
+ * this script or Rust toolchains, restart `npm run tauri:ios` so the cached options pick up the new PATH
+ * (otherwise Xcode can keep using an old `cargo` and fail on Cargo.lock v4).
  */
 const { spawnSync } = require("child_process");
 const fs = require("fs");
@@ -10,7 +15,10 @@ const path = require("path");
 const os = require("os");
 
 const rustupBin = path.join(os.homedir(), ".cargo", "bin");
-const newPath = `${rustupBin}${path.delimiter}${process.env.PATH || ""}`;
+// Must run before ~/.cargo/bin: Tauri's iOS pipeline spawns `cargo` with a filtered env
+// where RUSTUP_TOOLCHAIN is dropped; this shim forces `rustup run 1.88 cargo` (see scripts/ios-cargo/cargo).
+const iosCargoShim = path.join(__dirname, "ios-cargo");
+const newPath = `${iosCargoShim}${path.delimiter}${rustupBin}${path.delimiter}${process.env.PATH || ""}`;
 const env = { ...process.env, PATH: newPath };
 
 let args = process.argv.slice(2);

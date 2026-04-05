@@ -1,0 +1,4 @@
+[toolchain]
+# Same as repo root — ensures `cargo` invoked next to `Cargo.toml` picks 1.88 (needed for Cargo.lock v4 under Xcode/Tauri).
+channel = "1.88"
+components = ["rustfmt", "clippy"]

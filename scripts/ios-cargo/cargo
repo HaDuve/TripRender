@@ -1,0 +1,5 @@
+#!/bin/sh
+# Thin shim: Tauri's iOS pipeline spawns `cargo` with a filtered env that does not
+# forward RUSTUP_TOOLCHAIN. Prepend scripts/ios-cargo to PATH (see Xcode "Build Rust Code")
+# so the real build always uses the pinned toolchain from rust-toolchain.toml / rustup.
+exec "${HOME}/.cargo/bin/rustup" run 1.88 cargo "$@"

@@ -1,3 +1,4 @@
 [toolchain]
-channel = "stable"
+# Pin so rustup installs a Cargo that understands Cargo.lock v4 (needs Rust ≥ ~1.78; matches package rust-version).
+channel = "1.88"
 components = ["rustfmt", "clippy"]
