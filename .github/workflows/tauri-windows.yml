@@ -1,0 +1,53 @@
+name: Tauri Windows build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/tauri-windows.yml"
+      - "src-tauri/**"
+      - "index.html"
+      - "build.js"
+      - "package.json"
+      - "package-lock.json"
+      - "rust-toolchain.toml"
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Check MAPBOX_TOKEN
+        shell: bash
+        run: |
+          if [ -z "${{ secrets.MAPBOX_TOKEN }}" ]; then
+            echo "::error::Add MAPBOX_TOKEN to repository Actions secrets (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build Tauri app (Windows)
+        run: npm run tauri:build
+        env:
+          MAPBOX_TOKEN: ${{ secrets.MAPBOX_TOKEN }}
+
+      - name: Upload bundle artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: triprender-windows-bundle
+          path: src-tauri/target/release/bundle/

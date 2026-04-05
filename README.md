@@ -47,3 +47,53 @@ git push -u origin main
 ## Deploy to Netlify
 
 Set `MAPBOX_TOKEN` in Site settings → Environment variables. Build command: `node build.js`, publish directory: `dist`.
+
+## Tauri (desktop + mobile)
+
+Native shells use the same web UI (`index.html` → `dist/` after `build.js`). Prerequisites: [Node.js](https://nodejs.org/) LTS, [Rust via rustup](https://rustup.rs/) (this repo pins the toolchain in [`rust-toolchain.toml`](rust-toolchain.toml) — use **stable**, not an outdated Homebrew-only `cargo`). The `tauri:*` npm scripts run [`scripts/tauri-with-rustup.js`](scripts/tauri-with-rustup.js), which prepends `~/.cargo/bin` to `PATH` so Tauri uses rustup’s toolchain. You can also run `export PATH="$HOME/.cargo/bin:$PATH"` in your shell (or `brew unlink rust` if you use rustup instead of Homebrew’s Rust).
+
+### Desktop
+
+```bash
+npm install
+# Ensure .env contains MAPBOX_TOKEN (see above)
+npm run tauri:dev
+```
+
+Release build (macOS example produces `.app` / `.dmg` under `src-tauri/target/release/bundle/`):
+
+```bash
+npm run tauri:build
+```
+
+### iOS and Android
+
+Follow [Tauri prerequisites for mobile](https://v2.tauri.app/start/prerequisites/) (Xcode + CocoaPods on macOS for iOS; Android Studio + NDK + `ANDROID_HOME` for Android). Then:
+
+```bash
+npm run tauri:ios       # or: npx tauri ios dev
+npm run tauri:ios:sim   # prefer Simulator (no Apple dev account required)
+npm run tauri:android   # or: npx tauri android dev
+```
+
+Set your Apple **development team** for device/TestFlight builds (`bundle.iOS.developmentTeam` in Tauri config or `APPLE_DEVELOPMENT_TEAM`).
+
+#### iOS troubleshooting (physical device)
+
+If `tauri ios dev` fails against a **connected iPhone**, typical causes match the Xcode error text:
+
+1. **Developer Disk Image / “device is not available”** — Unlock the phone, trust this Mac, enable **Developer Mode** (Settings → Privacy & Security on iOS 16+). Keep the device awake while Xcode attaches.
+2. **“No Accounts” / no provisioning profile for `com.triprender.routefinder`** — In **Xcode → Settings → Accounts**, sign in with your Apple ID. Open `src-tauri/gen/apple/` in Xcode → target **Signing & Capabilities** → enable **Automatically manage signing** and pick your team (same as `bundle.iOS.developmentTeam`).
+3. **“iOS xx.x is not installed” (Components)** — The phone’s iOS version needs a matching **device support** / platform in Xcode. Install it under **Xcode → Settings → Platforms** (or **Components** on older Xcode). Alternatively use **`npm run tauri:ios:sim`** and pick a simulator name that exists (`xcrun simctl list devices available`). Change the device name in `package.json` if you don’t have an “iPhone 16” simulator.
+
+### CI: Windows installer
+
+Workflow [`.github/workflows/tauri-windows.yml`](.github/workflows/tauri-windows.yml) builds on `windows-latest` and uploads `src-tauri/target/release/bundle/` as an artifact. Configure the **`MAPBOX_TOKEN`** secret (same as Pages deploy).
+
+### Store signing (when you ship)
+
+- [macOS / iOS code signing](https://v2.tauri.app/distribute/sign/macos/) · [iOS](https://v2.tauri.app/distribute/sign/ios/)
+- [Windows](https://v2.tauri.app/distribute/sign/windows/)
+- [Android](https://v2.tauri.app/distribute/sign/android/)
+
+Tauri 2 supports desktop and mobile from one web frontend; see the [Tauri 2.0 announcement](https://v2.tauri.app/blog/tauri-20/) for context.

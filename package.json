@@ -1,0 +1,21 @@
+{
+  "name": "triprender",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Mapbox route finder — Tauri shell for desktop and mobile",
+  "scripts": {
+    "tauri": "tauri",
+    "build:web": "node build.js",
+    "dev:server": "node scripts/free-port-1420.js && node build.js && npx serve dist -l 1420",
+    "tauri:dev": "node scripts/tauri-with-rustup.js dev",
+    "tauri:build": "node scripts/tauri-with-rustup.js build",
+    "tauri:ios": "node scripts/tauri-with-rustup.js ios dev",
+    "tauri:ios:sim": "node scripts/ensure-simulator-booted.js \"iPhone 16\" && node scripts/tauri-with-rustup.js ios dev iPhone 16",
+    "tauri:android": "node scripts/tauri-with-rustup.js android dev"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.10.1",
+    "dotenv": "^16.4.7",
+    "serve": "^14.2.4"
+  }
+}
