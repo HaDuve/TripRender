@@ -33,6 +33,8 @@ function bridgeAppleApiEnv() {
 
 bridgeAppleApiEnv();
 
+const { envForLocalXcodeSigning } = require("./ios-xcode-sign-env");
+
 function readCounter() {
   if (!fs.existsSync(counterPath)) return 0;
   const n = parseInt(fs.readFileSync(counterPath, "utf8").trim(), 10);
@@ -49,8 +51,7 @@ function writeCounter(n) {
 }
 
 function runIosBuild(buildNumber) {
-  const env = { ...process.env };
-  delete env.CI;
+  const env = envForLocalXcodeSigning();
   const r = spawnSync(
     process.execPath,
     [

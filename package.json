@@ -11,7 +11,7 @@
     "tauri:build": "npm run build:web && node scripts/tauri-with-rustup.js build",
     "tauri:ios": "npm run build:web && node scripts/tauri-with-rustup.js ios dev",
     "tauri:ios:sim": "npm run build:web && node scripts/ensure-simulator-booted.js \"iPhone 16\" && node scripts/tauri-with-rustup.js ios dev iPhone 16",
-    "tauri:ios:release": "npm run build:web && env -u CI node scripts/tauri-with-rustup.js ios build --export-method app-store-connect",
+    "tauri:ios:release": "npm run build:web && node scripts/tauri-ios-release-build.js",
     "build:submit:ios": "npm run build:web && node scripts/ios-submit-pipeline.js",
     "tauri:android": "npm run build:web && node scripts/tauri-with-rustup.js android dev"
   },
