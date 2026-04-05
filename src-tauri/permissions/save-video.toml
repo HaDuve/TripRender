@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-save-video-to-photos-library"
+description = "Allow saving exported MP4 to the iOS Photos library (no custom album)."
+commands.allow = ["save_video_to_photos_library"]

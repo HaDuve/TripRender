@@ -37,7 +37,8 @@
       "icons/icon.ico"
     ],
     "iOS": {
-      "developmentTeam": "AK62F8767Z"
+      "developmentTeam": "AK62F8767Z",
+      "infoPlist": "Info.ios.plist"
     }
   }
 }

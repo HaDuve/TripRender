@@ -6,6 +6,13 @@
     "main"
   ],
   "permissions": [
-    "core:default"
+    "core:default",
+    "allow-save-video-to-photos-library",
+    "fs:default",
+    "fs:allow-appcache-write",
+    "fs:allow-cache-write-recursive",
+    "dialog:default",
+    "fs:allow-write-file",
+    "os:default"
   ]
 }

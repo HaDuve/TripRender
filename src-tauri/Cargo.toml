@@ -23,3 +23,24 @@ serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
 tauri = { version = "2.10.3", features = [] }
 tauri-plugin-log = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-os = "2"
+
+[target.'cfg(target_os = "ios")'.dependencies]
+objc2-photos = { version = "0.3.2", default-features = false, features = [
+  "std",
+  "alloc",
+  "PHPhotoLibrary",
+  "PHChangeRequest",
+  "PHAssetChangeRequest",
+  "dispatch2",
+  "block2",
+] }
+objc2-foundation = { version = "0.3.2", features = ["NSString", "NSURL", "NSError"] }
+block2 = "0.6"
+dispatch2 = { version = "0.3.1", default-features = false, features = [
+  "alloc",
+  "block2",
+  "objc2",
+] }

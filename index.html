@@ -244,6 +244,103 @@
       #exportOverlayStatus {
         font-size: 14px;
       }
+      .export-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.78);
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+        box-sizing: border-box;
+      }
+      .export-modal-panel {
+        background: var(--panel-bg);
+        color: var(--panel-text);
+        max-width: min(26rem, 100%);
+        padding: 1.25rem 1.35rem;
+        border-radius: 10px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+      }
+      .export-modal-panel.wide {
+        max-width: min(28rem, 100%);
+      }
+      .export-modal-title {
+        margin: 0 0 0.35rem;
+        font-size: 1.15rem;
+        font-weight: 600;
+        line-height: 1.25;
+      }
+      .export-modal-title.success {
+        color: var(--btn-bg);
+      }
+      .export-modal-title.error {
+        color: var(--error-color);
+      }
+      .export-modal-title.neutral {
+        color: var(--secondary-text);
+      }
+      .export-modal-lead {
+        margin: 0 0 0.75rem;
+        font-size: 0.95rem;
+        line-height: 1.5;
+        color: var(--panel-text);
+      }
+      .export-modal-list {
+        margin: 0.35rem 0 0.85rem;
+        padding-left: 1.2rem;
+        font-size: 0.9rem;
+        line-height: 1.45;
+        color: var(--secondary-text);
+      }
+      .export-modal-meta {
+        margin: 0 0 0.85rem;
+        font-size: 0.85rem;
+        line-height: 1.4;
+        color: var(--secondary-text);
+      }
+      .export-modal-details {
+        margin: 0 0 0.85rem;
+        font-size: 0.8rem;
+        color: var(--secondary-text);
+      }
+      .export-modal-details summary {
+        cursor: pointer;
+        color: var(--btn-bg);
+        margin-bottom: 0.35rem;
+      }
+      .export-modal-details pre {
+        margin: 0.35rem 0 0;
+        padding: 0.5rem 0.65rem;
+        background: var(--input-bg);
+        border: 1px solid var(--input-border);
+        border-radius: 6px;
+        font-size: 0.72rem;
+        overflow: auto;
+        max-height: 8rem;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .export-modal-actions {
+        display: flex;
+        gap: 0.75rem;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+      }
+      .export-modal-actions button {
+        width: auto;
+        min-width: 5.5rem;
+        margin: 0;
+      }
+      .export-modal-btn-secondary {
+        background: var(--input-bg) !important;
+        color: var(--panel-text) !important;
+        border: 1px solid var(--input-border) !important;
+      }
+      .export-modal-btn-secondary:hover {
+        filter: brightness(0.97);
+      }
       input,
       button {
         padding: 8px 12px;
@@ -870,6 +967,7 @@
     </div>
     <div id="mapWrapper"><div id="map"></div></div>
 
+    <script type="module" src="/tauri-bridge.js"></script>
     <script>
       mapboxgl.accessToken = "__MAPBOX_TOKEN__";
 
@@ -2141,8 +2239,235 @@
         if (overlayStatusEl) overlayStatusEl.textContent = text;
       }
 
+      function triprenderFormatBytes(n) {
+        if (n == null || !Number.isFinite(n)) return "";
+        if (n < 1024) return n + " B";
+        if (n < 1024 * 1024) return (n / 1024).toFixed(n < 10240 ? 1 : 0) + " KB";
+        return (n / (1024 * 1024)).toFixed(1) + " MB";
+      }
+
+      function triprenderBasename(p) {
+        if (!p || typeof p !== "string") return "";
+        var s = p.replace(/\\/g, "/");
+        var i = s.lastIndexOf("/");
+        return i >= 0 ? s.slice(i + 1) : s;
+      }
+
+      /** @returns {Promise<boolean>} */
+      function triprenderShowExportPreflight() {
+        return new Promise(function (resolve) {
+          var sizeStr =
+            (document.getElementById("exportSize") &&
+              document.getElementById("exportSize").value) ||
+            "";
+          var isTauriApp =
+            typeof window.triprenderIsTauri === "function" &&
+            window.triprenderIsTauri();
+
+          var overlay = document.createElement("div");
+          overlay.className = "export-modal-backdrop";
+          overlay.setAttribute("role", "dialog");
+          overlay.setAttribute("aria-modal", "true");
+          overlay.style.zIndex = "10000";
+
+          var box = document.createElement("div");
+          box.className = "export-modal-panel wide";
+
+          var h = document.createElement("h3");
+          h.className = "export-modal-title";
+          h.textContent = "Export your route video";
+
+          var lead = document.createElement("p");
+          lead.className = "export-modal-lead";
+          lead.textContent =
+            "We’ll record the animated map as an MP4" +
+            (sizeStr ? " at " + sizeStr.replace("x", " × ") + " pixels." : ".");
+
+          var ul = document.createElement("ul");
+          ul.className = "export-modal-list";
+          var li1 = document.createElement("li");
+          li1.textContent =
+            "Export can take a little while and may warm the device or use extra battery.";
+          ul.appendChild(li1);
+          var li2 = document.createElement("li");
+          li2.textContent = isTauriApp
+            ? "On iPhone or iPad, Photos may ask permission to add the video to your library (it appears in Recents). On Android, you’ll choose a folder to save the file."
+            : "In the browser, use Share or Save when your device offers it.";
+          ul.appendChild(li2);
+          var li3 = document.createElement("li");
+          li3.textContent =
+            "You can cancel before recording starts; once export begins, wait until it finishes.";
+          ul.appendChild(li3);
+
+          var row = document.createElement("div");
+          row.className = "export-modal-actions";
+          var cancel = document.createElement("button");
+          cancel.type = "button";
+          cancel.className = "export-modal-btn-secondary";
+          cancel.textContent = "Not now";
+          cancel.onclick = function () {
+            overlay.remove();
+            resolve(false);
+          };
+          var start = document.createElement("button");
+          start.type = "button";
+          start.textContent = "Start export";
+          start.onclick = function () {
+            overlay.remove();
+            resolve(true);
+          };
+          row.appendChild(cancel);
+          row.appendChild(start);
+
+          box.appendChild(h);
+          box.appendChild(lead);
+          box.appendChild(ul);
+          box.appendChild(row);
+          overlay.appendChild(box);
+          overlay.onclick = function (ev) {
+            if (ev.target === overlay) {
+              overlay.remove();
+              resolve(false);
+            }
+          };
+          document.body.appendChild(overlay);
+        });
+      }
+
+      /** @param {Record<string, unknown>} exportResult */
+      function triprenderShowExportResult(exportResult) {
+        return new Promise(function (resolve) {
+          var err = exportResult.error;
+          var kind = exportResult.resultKind;
+          var bytes = exportResult.bytes;
+          var errStr = "";
+          var friendly = "";
+          var techDetailsEl = null;
+
+          var titleEl = document.createElement("h3");
+          titleEl.className = "export-modal-title";
+
+          var lead = document.createElement("p");
+          lead.className = "export-modal-lead";
+
+          var meta = document.createElement("p");
+          meta.className = "export-modal-meta";
+
+          if (err) {
+            titleEl.className += " error";
+            titleEl.textContent = "Couldn’t finish saving";
+            lead.textContent =
+              "The video was created, but saving it didn’t work. You can try again in a moment.";
+            errStr = String(err);
+            friendly = errStr;
+            if (/PHPhotosErrorDomain\s+3302/i.test(errStr)) {
+              friendly =
+                "Photos couldn’t use this file. Try exporting again. If it keeps failing, update iOS or check that you have enough free storage.";
+            } else if (/denied|authorization/i.test(errStr)) {
+              friendly =
+                "Permission was denied. In Settings → Privacy, allow Photos access for this app, then try again.";
+            }
+            meta.textContent = friendly;
+            if (friendly !== errStr) {
+              techDetailsEl = document.createElement("details");
+              techDetailsEl.className = "export-modal-details";
+              var summ = document.createElement("summary");
+              summ.textContent = "Technical details";
+              var pre = document.createElement("pre");
+              pre.textContent = errStr;
+              techDetailsEl.appendChild(summ);
+              techDetailsEl.appendChild(pre);
+            }
+          } else if (kind === "cancelled") {
+            titleEl.className += " neutral";
+            titleEl.textContent = "Save cancelled";
+            lead.textContent =
+              "No file was saved. Run export again whenever you’re ready.";
+          } else if (kind === "ios-photos-library") {
+            titleEl.className += " success";
+            titleEl.textContent = "Saved to Photos";
+            lead.textContent =
+              "Your video was added to your library. Open the Photos app and check Recents or Videos.";
+            var bn = triprenderBasename(exportResult.path);
+            if (bn) meta.textContent = "File name: " + bn;
+          } else if (kind === "android-save") {
+            titleEl.className += " success";
+            titleEl.textContent = "Video saved";
+            lead.textContent =
+              "Your video was saved to the folder you chose.";
+            var bnA = triprenderBasename(exportResult.path);
+            if (bnA) meta.textContent = "Saved as: " + bnA;
+          } else if (kind === "desktop-fallback") {
+            titleEl.className += " success";
+            titleEl.textContent = "Download started";
+            lead.textContent =
+              "Your browser should save the file as route-animation.mp4. You can use HandBrake or similar if you need a smaller file.";
+          } else if (kind === "web-browser") {
+            titleEl.className += " success";
+            titleEl.textContent = "Export ready";
+            lead.textContent =
+              "Use Share, Save to Files, or your browser’s download option to keep the video.";
+          } else {
+            titleEl.className += " success";
+            titleEl.textContent = "Export finished";
+            lead.textContent = "Your route animation was exported.";
+          }
+
+          if (!err && kind !== "cancelled" && bytes != null && Number.isFinite(bytes)) {
+            var sz = triprenderFormatBytes(bytes);
+            if (sz) {
+              if (meta.textContent) {
+                meta.textContent += " · About " + sz;
+              } else {
+                meta.textContent = "About " + sz;
+              }
+            }
+          }
+
+          var overlay = document.createElement("div");
+          overlay.className = "export-modal-backdrop";
+          overlay.setAttribute("role", "dialog");
+          overlay.setAttribute("aria-modal", "true");
+          overlay.style.zIndex = "10001";
+
+          var box = document.createElement("div");
+          box.className = "export-modal-panel";
+
+          var ok = document.createElement("button");
+          ok.type = "button";
+          ok.textContent = "Got it";
+          ok.onclick = function () {
+            overlay.remove();
+            resolve();
+          };
+
+          var actions = document.createElement("div");
+          actions.className = "export-modal-actions";
+          actions.appendChild(ok);
+
+          box.appendChild(titleEl);
+          box.appendChild(lead);
+          if (meta.textContent) box.appendChild(meta);
+          if (techDetailsEl) box.appendChild(techDetailsEl);
+          box.appendChild(actions);
+
+          overlay.appendChild(box);
+          document.body.appendChild(overlay);
+        });
+      }
+
       async function exportVideo() {
         if (!currentRoute) return;
+        var proceed = await triprenderShowExportPreflight();
+        if (!proceed) return;
+
+        var exportResult = {
+          resultKind: null,
+          path: null,
+          bytes: null,
+          error: null,
+        };
+
         setPanelOpen(false);
         exportInProgress = true;
         updateAnimationUI();
@@ -2166,7 +2491,12 @@
           ]);
           const loadEncoder = encoderModule.default;
           const supportsSIMD = await simdModule.simd();
-          const Encoder = await loadEncoder({ simd: supportsSIMD });
+          const isIOSLikeUA =
+            /iPhone|iPad|iPod/i.test(navigator.userAgent || "") ||
+            (navigator.platform === "MacIntel" &&
+              navigator.maxTouchPoints > 1);
+          const useSimd = supportsSIMD && !isIOSLikeUA;
+          const Encoder = await loadEncoder({ simd: useSimd });
 
           const sizeStr = document.getElementById("exportSize").value;
           const [width, height] = sizeStr.split("x").map(Number);
@@ -2185,8 +2515,11 @@
           await map.once("idle");
 
           const gl = map.painter.context.gl;
-          const glWidth = gl.drawingBufferWidth;
-          const glHeight = gl.drawingBufferHeight;
+          // H.264 needs even dimensions; iOS can report odd drawingBuffer width — fixes tiny/invalid MP4 on Photos.
+          let glWidth = gl.drawingBufferWidth;
+          let glHeight = gl.drawingBufferHeight;
+          if (glWidth >= 2 && (glWidth & 1)) glWidth--;
+          if (glHeight >= 2 && (glHeight & 1)) glHeight--;
 
           const encoder = Encoder.create({
             width: glWidth,
@@ -2244,44 +2577,177 @@
             onRender: captureFrame,
           });
           const mp4 = encoder.end();
-          const file = new File([mp4], "route-animation.mp4", {
-            type: "video/mp4",
-          });
+          exportResult.bytes = mp4.byteLength;
           const downloadBlob = new Blob([mp4], { type: "video/mp4" });
 
-          const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-          let didShare = false;
-          const shareData = { files: [file], title: "Route animation" };
-          const canShare = typeof navigator.canShare === "function" && navigator.canShare(shareData);
-          if (typeof navigator.share === "function" && canShare) {
+          if (
+            typeof window.triprenderIsTauri === "function" &&
+            window.triprenderIsTauri() &&
+            typeof window.saveTripRenderExport === "function"
+          ) {
             try {
-              var sharePromise = navigator.share(shareData);
-              var timeoutMs = isIOS ? 6000 : 0;
-              if (timeoutMs) {
-                try {
-                  await Promise.race([
-                    sharePromise,
-                    new Promise(function (_, reject) {
-                      setTimeout(function () { reject({ name: "Timeout" }); }, timeoutMs);
-                    }),
-                  ]);
-                } catch (raceErr) {
-                  if (raceErr.name === "Timeout") {
-                    didShare = true;
-                    setExportStatus("If you chose Save to Photos or Save to Files, check that app for the video.");
-                  }
-                  throw raceErr;
-                }
+              const result = await window.saveTripRenderExport(mp4);
+              exportResult.resultKind = result.kind;
+              exportResult.path = result.path || null;
+              if (result.kind === "ios-photos-library") {
+                setExportStatus("Saved to Photos (Library / Recents).");
+              } else if (result.kind === "android-save") {
+                setExportStatus("Video saved.");
+              } else if (result.kind === "cancelled") {
+                setExportStatus("Save cancelled.");
               } else {
-                await sharePromise;
-              }
-              if (!didShare) {
-                didShare = true;
-                setExportStatus(isIOS ? "Check the Photos or Files app for the video." : "Saved via share sheet");
-              }
-            } catch (shareErr) {
-              if (shareErr.name !== "AbortError" && !isIOS) {
                 const blobUrl = URL.createObjectURL(downloadBlob);
+                const a = document.createElement("a");
+                a.href = blobUrl;
+                a.download = "route-animation.mp4";
+                a.click();
+                setTimeout(function () {
+                  URL.revokeObjectURL(blobUrl);
+                }, 1000);
+                setExportStatus(
+                  "Done. Run ffmpeg -i route-animation.mp4 out.mp4 to compress.",
+                );
+              }
+            } catch (tauriErr) {
+              exportResult.error =
+                (tauriErr && tauriErr.message) || String(tauriErr);
+              setExportStatus("Error: " + exportResult.error);
+            }
+          } else {
+            exportResult.resultKind = "web-browser";
+            const file = new File([mp4], "route-animation.mp4", {
+              type: "video/mp4",
+            });
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            let didShare = false;
+            const shareData = { files: [file], title: "Route animation" };
+            const canShare = typeof navigator.canShare === "function" && navigator.canShare(shareData);
+            if (typeof navigator.share === "function" && canShare) {
+              try {
+                var sharePromise = navigator.share(shareData);
+                var timeoutMs = isIOS ? 6000 : 0;
+                if (timeoutMs) {
+                  try {
+                    await Promise.race([
+                      sharePromise,
+                      new Promise(function (_, reject) {
+                        setTimeout(function () { reject({ name: "Timeout" }); }, timeoutMs);
+                      }),
+                    ]);
+                  } catch (raceErr) {
+                    if (raceErr.name === "Timeout") {
+                      didShare = true;
+                      setExportStatus("If you chose Save to Photos or Save to Files, check that app for the video.");
+                    }
+                    throw raceErr;
+                  }
+                } else {
+                  await sharePromise;
+                }
+                if (!didShare) {
+                  didShare = true;
+                  setExportStatus(isIOS ? "Check the Photos or Files app for the video." : "Saved via share sheet");
+                }
+              } catch (shareErr) {
+                if (shareErr.name !== "AbortError" && !isIOS) {
+                  const blobUrl = URL.createObjectURL(downloadBlob);
+                  const a = document.createElement("a");
+                  a.href = blobUrl;
+                  a.download = "route-animation.mp4";
+                  a.click();
+                  setTimeout(function () {
+                    URL.revokeObjectURL(blobUrl);
+                  }, 1000);
+                  setExportStatus(
+                    "Done. Run ffmpeg -i route-animation.mp4 out.mp4 to compress.",
+                  );
+                }
+              }
+            }
+            if (!didShare) {
+              const blobUrl = URL.createObjectURL(downloadBlob);
+              if (isIOS) {
+                setExportStatus(
+                  "Use \"Share again\" and choose Save to Photos or Save to Files.",
+                );
+                const wrap = document.createElement("div");
+                wrap.id = "iosSaveOverlay";
+                wrap.setAttribute("aria-hidden", "false");
+                wrap.style.cssText =
+                  "position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;padding:1rem;box-sizing:border-box;";
+                const msg = document.createElement("p");
+                msg.style.color = "#fff";
+                msg.style.textAlign = "center";
+                msg.style.margin = "0";
+                msg.style.maxWidth = "320px";
+                if (typeof navigator.share === "function") {
+                  msg.textContent =
+                    "To save to Photos: tap \"Share again\" and choose Save to Photos or Save to Files. You can also long-press the video below and choose Save to Video / Add to Photos.";
+                } else {
+                  msg.textContent =
+                    "Saving to Photos only works in Safari. Open this page in Safari (and use HTTPS), then export again and use the share sheet.";
+                }
+                const videoEl = document.createElement("video");
+                videoEl.controls = true;
+                videoEl.setAttribute("playsinline", "");
+                videoEl.style.maxWidth = "100%";
+                videoEl.style.maxHeight = "40vh";
+                videoEl.style.borderRadius = "8px";
+                const sourceEl = document.createElement("source");
+                sourceEl.src = blobUrl;
+                sourceEl.type = "video/mp4";
+                videoEl.appendChild(sourceEl);
+                const shareAgainBtn = document.createElement("button");
+                shareAgainBtn.type = "button";
+                shareAgainBtn.textContent = "Share again";
+                shareAgainBtn.style.padding = "0.75rem 1.5rem";
+                shareAgainBtn.style.fontSize = "1.1rem";
+                shareAgainBtn.onclick = function () {
+                  const shareFile = new File([downloadBlob], "route-animation.mp4", {
+                    type: "video/mp4",
+                  });
+                  var resolved = false;
+                  function closeOverlay(successMsg) {
+                    if (resolved) return;
+                    resolved = true;
+                    wrap.remove();
+                    URL.revokeObjectURL(blobUrl);
+                    if (successMsg) setExportStatus(successMsg);
+                  }
+                  var t = setTimeout(function () {
+                    closeOverlay("If you chose Save to Photos or Save to Files, check that app for the video.");
+                  }, 3000);
+                  navigator.share({ files: [shareFile], title: "Route animation" }).then(
+                    function () {
+                      clearTimeout(t);
+                      closeOverlay("Check the Photos or Files app for the video.");
+                    },
+                    function (err) {
+                      clearTimeout(t);
+                      if (err.name !== "AbortError") {
+                        setExportStatus("Share failed: " + (err.message || err.name));
+                      }
+                      closeOverlay();
+                    }
+                  );
+                };
+                const closeBtn = document.createElement("button");
+                closeBtn.type = "button";
+                closeBtn.textContent = "Close";
+                closeBtn.style.padding = "0.5rem 1rem";
+                closeBtn.onclick = function () {
+                  wrap.remove();
+                  URL.revokeObjectURL(blobUrl);
+                  setExportStatus("");
+                };
+                wrap.appendChild(msg);
+                wrap.appendChild(videoEl);
+                if (typeof navigator.share === "function") {
+                  wrap.appendChild(shareAgainBtn);
+                }
+                wrap.appendChild(closeBtn);
+                document.body.appendChild(wrap);
+              } else {
                 const a = document.createElement("a");
                 a.href = blobUrl;
                 a.download = "route-animation.mp4";
@@ -2295,104 +2761,9 @@
               }
             }
           }
-          if (!didShare) {
-            const blobUrl = URL.createObjectURL(downloadBlob);
-            if (isIOS) {
-              setExportStatus(
-                "Use \"Share again\" and choose Save to Photos or Save to Files.",
-              );
-              const wrap = document.createElement("div");
-              wrap.id = "iosSaveOverlay";
-              wrap.setAttribute("aria-hidden", "false");
-              wrap.style.cssText =
-                "position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;padding:1rem;box-sizing:border-box;";
-              const msg = document.createElement("p");
-              msg.style.color = "#fff";
-              msg.style.textAlign = "center";
-              msg.style.margin = "0";
-              msg.style.maxWidth = "320px";
-              if (typeof navigator.share === "function") {
-                msg.textContent =
-                  "To save to Photos: tap \"Share again\" and choose Save to Photos or Save to Files. You can also long-press the video below and choose Save to Video / Add to Photos.";
-              } else {
-                msg.textContent =
-                  "Saving to Photos only works in Safari. Open this page in Safari (and use HTTPS), then export again and use the share sheet.";
-              }
-              const videoEl = document.createElement("video");
-              videoEl.controls = true;
-              videoEl.setAttribute("playsinline", "");
-              videoEl.style.maxWidth = "100%";
-              videoEl.style.maxHeight = "40vh";
-              videoEl.style.borderRadius = "8px";
-              const sourceEl = document.createElement("source");
-              sourceEl.src = blobUrl;
-              sourceEl.type = "video/mp4";
-              videoEl.appendChild(sourceEl);
-              const shareAgainBtn = document.createElement("button");
-              shareAgainBtn.type = "button";
-              shareAgainBtn.textContent = "Share again";
-              shareAgainBtn.style.padding = "0.75rem 1.5rem";
-              shareAgainBtn.style.fontSize = "1.1rem";
-              shareAgainBtn.onclick = function () {
-                const shareFile = new File([downloadBlob], "route-animation.mp4", {
-                  type: "video/mp4",
-                });
-                var resolved = false;
-                function closeOverlay(successMsg) {
-                  if (resolved) return;
-                  resolved = true;
-                  wrap.remove();
-                  URL.revokeObjectURL(blobUrl);
-                  if (successMsg) setExportStatus(successMsg);
-                }
-                var t = setTimeout(function () {
-                  closeOverlay("If you chose Save to Photos or Save to Files, check that app for the video.");
-                }, 3000);
-                navigator.share({ files: [shareFile], title: "Route animation" }).then(
-                  function () {
-                    clearTimeout(t);
-                    closeOverlay("Check the Photos or Files app for the video.");
-                  },
-                  function (err) {
-                    clearTimeout(t);
-                    if (err.name !== "AbortError") {
-                      setExportStatus("Share failed: " + (err.message || err.name));
-                    }
-                    closeOverlay();
-                  }
-                );
-              };
-              const closeBtn = document.createElement("button");
-              closeBtn.type = "button";
-              closeBtn.textContent = "Close";
-              closeBtn.style.padding = "0.5rem 1rem";
-              closeBtn.onclick = function () {
-                wrap.remove();
-                URL.revokeObjectURL(blobUrl);
-                setExportStatus("");
-              };
-              wrap.appendChild(msg);
-              wrap.appendChild(videoEl);
-              if (typeof navigator.share === "function") {
-                wrap.appendChild(shareAgainBtn);
-              }
-              wrap.appendChild(closeBtn);
-              document.body.appendChild(wrap);
-            } else {
-              const a = document.createElement("a");
-              a.href = blobUrl;
-              a.download = "route-animation.mp4";
-              a.click();
-              setTimeout(function () {
-                URL.revokeObjectURL(blobUrl);
-              }, 1000);
-              setExportStatus(
-                "Done. Run ffmpeg -i route-animation.mp4 out.mp4 to compress.",
-              );
-            }
-          }
         } catch (err) {
-          setExportStatus("Error: " + (err.message || "Export failed"));
+          exportResult.error = (err && err.message) || String(err);
+          setExportStatus("Error: " + exportResult.error);
         } finally {
           document.body.classList.remove("exporting");
           if (exportOverlay) exportOverlay.classList.remove("visible");
@@ -2409,6 +2780,7 @@
           exportInProgress = false;
           updateAnimationUI();
           setPanelOpen(true);
+          await triprenderShowExportResult(exportResult);
         }
       }
     </script>
