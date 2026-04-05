@@ -78,6 +78,28 @@ npm run tauri:android   # or: npx tauri android dev
 
 Set your Apple **development team** for device/TestFlight builds (`bundle.iOS.developmentTeam` in Tauri config or `APPLE_DEVELOPMENT_TEAM`).
 
+#### iOS release (TestFlight / App Store)
+
+Use the Tauri CLI so the Rust build phase gets CLI options (do not rely on **Product → Archive** alone without a prior `tauri ios dev` / `tauri ios build`):
+
+```bash
+npm run tauri:ios:release
+```
+
+One-step **build + upload** (reads `.env` for API keys; `.env` stays gitignored — copy from [`.env.example`](.env.example)):
+
+```bash
+npm run build:submit:ios
+```
+
+Put `APPLE_API_KEY_ID` and `APPLE_API_ISSUER` in `.env` and keep `AuthKey_<KEY_ID>.p8` under `~/private_keys/` per [Tauri authentication](https://v2.tauri.app/distribute/app-store/#authentication).
+
+IPA: `src-tauri/gen/apple/build/arm64/TripRender.ipa`. Manual upload: `xcrun altool` per the [Tauri App Store guide](https://v2.tauri.app/distribute/app-store/). **Xcode Cloud:** custom scripts live in [`src-tauri/gen/apple/ci_scripts/`](src-tauri/gen/apple/ci_scripts/) (same folder as `app.xcodeproj`, per [Apple](https://developer.apple.com/documentation/xcode/writing-custom-build-scripts)). Tune the workflow as follows:
+
+- **Environment:** add `APPLE_API_KEY_ID` and `APPLE_API_ISSUER` (and install the `.p8` key where `altool` expects it — see [Tauri App Store / Authentication](https://v2.tauri.app/distribute/app-store/)). Optional: `CI=true` if your tooling needs it; avoid numeric `CI=1` for the Tauri CLI (`ci_pre_xcodebuild.sh` clears `CI` for the `node … ios build` step).
+- **Actions (Pattern 1):** `ci_pre_xcodebuild.sh` runs the full `tauri ios build` (Strategy A). If the workflow also runs a separate **Archive** action, you may compile twice — remove the redundant archive step or accept the duplicate work ([workflow actions](https://developer.apple.com/documentation/Xcode/Configuring-Your-Xcode-Cloud-Workflow-s-Actions)).
+- **Variables:** `CI_PRIMARY_REPOSITORY_PATH` and `CI_XCODEBUILD_ACTION` are set by Xcode Cloud ([reference](https://developer.apple.com/documentation/xcode/environment-variable-reference)).
+
 #### iOS troubleshooting (physical device)
 
 If `tauri ios dev` fails against a **connected iPhone**, typical causes match the Xcode error text:
