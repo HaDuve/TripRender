@@ -874,7 +874,7 @@
               <input
                 type="number"
                 id="startAltitude"
-                value="500000"
+                value="400000"
                 min="100"
                 step="100"
                 hidden
@@ -1363,6 +1363,14 @@
       const MIN_LEG_DURATION_MS = 2000;
       const MAX_LEG_DURATION_MS = 60000;
 
+      /**
+       * After the route finishes, zoom altitude toward shortest-leg framing, then hold.
+       * Visible only when camera follow is on (same as the rest of `updateAnimationFrame`).
+       */
+      const FINAL_DEST_HOLD_MS = 1000;
+      const FINAL_ZOOM_MS_MIN = 400;
+      const FINAL_ZOOM_MS_MAX = 8000;
+
       /** Fixed getLegDurations spread; speedup control removed from UI. */
       const TRIPRENDER_SPEEDUP = 1;
       const TRIPRENDER_DEFAULT_BEARING = 0;
@@ -1432,6 +1440,9 @@
       /** Upper clamp (m); 2 Mm was too low for long fly legs — allow orbit-scale framing. */
       const AUTO_ALTITUDE_MAX_M = 15_000_000;
 
+      /** Uniform reduction on auto altitude and fallbacks (20% lower). */
+      const ALTITUDE_HEIGHT_GLOBAL_SCALE = 0.8;
+
       /**
        * Scale raw auto altitude: short legs retain 60% (40% dial-back), long legs 80% (20% dial-back),
        * interpolated by effective arc length vs half a great circle.
@@ -1477,14 +1488,19 @@
         if (pitchRad <= 0.01 || fovRad <= 0) {
           const effKm =
             effectiveLegLengthMetersForAltitude(longestKm * 1000) / 1000;
-          const h0 = effKm * 1.5e6 * dialBack;
+          const h0 =
+            effKm * 1.5e6 * dialBack * ALTITUDE_HEIGHT_GLOBAL_SCALE;
           return Math.round(Math.max(50000, Math.min(AUTO_ALTITUDE_MAX_M, h0)));
         }
         const tanHalfFov = Math.tan(fovRad / 2);
         const sinPitch = Math.sin(pitchRad);
         const denom = 2 * tanHalfFov * sinPitch;
-        if (denom <= 1e-9) return 500000;
-        const h = (longestLegVisibleM / denom) * dialBack;
+        if (denom <= 1e-9)
+          return Math.round(500000 * ALTITUDE_HEIGHT_GLOBAL_SCALE);
+        const h =
+          (longestLegVisibleM / denom) *
+          dialBack *
+          ALTITUDE_HEIGHT_GLOBAL_SCALE;
         return Math.round(Math.max(50000, Math.min(AUTO_ALTITUDE_MAX_M, h)));
       }
 
@@ -2029,6 +2045,27 @@
           ? altitudeHoldMs + moveDurationMs
           : moveDurationMs;
 
+        let endRouteAlt = null;
+        let shortestLegAlt = null;
+        let finalZoomMs = 0;
+        let finalHoldMs = 0;
+        if (legTargetAltitudes?.length) {
+          endRouteAlt = legTargetAltitudes[legTargetAltitudes.length - 1];
+          shortestLegAlt = Math.min(...legTargetAltitudes);
+          const altDelta = Math.abs(endRouteAlt - shortestLegAlt);
+          if (altDelta < 1) {
+            finalZoomMs = 0;
+          } else {
+            const rawZoom = altitudeBlendDurationMs(endRouteAlt, shortestLegAlt);
+            finalZoomMs = Math.min(
+              FINAL_ZOOM_MS_MAX,
+              Math.max(FINAL_ZOOM_MS_MIN, rawZoom || 0),
+            );
+          }
+          finalHoldMs = FINAL_DEST_HOLD_MS;
+        }
+        const fullDurationMs = durationMsTotal + finalZoomMs + finalHoldMs;
+
         function pathProgressAt(elapsedMs) {
           if (useAltitudeTimeline) {
             return animationStateAtElapsed(
@@ -2051,6 +2088,7 @@
 
         function optsAtElapsed(elapsedMs) {
           if (!legTargetAltitudes?.length) return opts;
+          let base;
           if (useAltitudeTimeline) {
             const st = animationStateAtElapsed(
               elapsedMs,
@@ -2059,25 +2097,44 @@
               startAltitude,
               legTargetAltitudes,
             );
-            return { ...opts, currentAltitude: st.currentAltitude };
+            base = { ...opts, currentAltitude: st.currentAltitude };
+          } else {
+            const ctx = elapsedToLegContext(
+              elapsedMs,
+              legEndProgress,
+              legLengths,
+              maxTimePerStep,
+              speedup,
+              overrideDurs,
+            );
+            base = {
+              ...opts,
+              currentAltitude: currentAltitudeForLegState(
+                startAltitude,
+                legTargetAltitudes,
+                ctx.legIndex,
+                ctx.tInLeg,
+              ),
+            };
           }
-          const ctx = elapsedToLegContext(
-            elapsedMs,
-            legEndProgress,
-            legLengths,
-            maxTimePerStep,
-            speedup,
-            overrideDurs,
-          );
-          return {
-            ...opts,
-            currentAltitude: currentAltitudeForLegState(
-              startAltitude,
-              legTargetAltitudes,
-              ctx.legIndex,
-              ctx.tInLeg,
-            ),
-          };
+          if (
+            finalHoldMs <= 0 ||
+            endRouteAlt == null ||
+            shortestLegAlt == null
+          ) {
+            return base;
+          }
+          if (elapsedMs <= durationMsTotal) return base;
+          const t = elapsedMs - durationMsTotal;
+          if (t < finalZoomMs) {
+            const u =
+              finalZoomMs <= 0 ? 1 : smoothstep(Math.max(0, Math.min(1, t / finalZoomMs)));
+            return {
+              ...base,
+              currentAltitude: lerp(endRouteAlt, shortestLegAlt, u),
+            };
+          }
+          return { ...base, currentAltitude: shortestLegAlt };
         }
 
         if (exportMode) {
@@ -2086,8 +2143,8 @@
               typeof performance !== "undefined" ? performance.now() : 0;
             const startTime = now;
             const maxElapsed = Math.max(
-              durationMsTotal * 1.5,
-              durationMsTotal + 5000,
+              fullDurationMs * 1.5,
+              fullDurationMs + 5000,
             );
             if (typeof mapboxgl.setNow === "function") mapboxgl.setNow(now);
 
@@ -2102,7 +2159,13 @@
             const captureFrame = () => {
               const elapsed = now - startTime;
               const animationPhase = pathProgressAt(elapsed);
-              if (onProgress) onProgress(Math.min(1, animationPhase));
+              if (onProgress) {
+                onProgress(
+                  fullDurationMs > 0
+                    ? Math.min(1, elapsed / fullDurationMs)
+                    : 1,
+                );
+              }
               if (onRender) onRender();
             };
 
@@ -2114,15 +2177,23 @@
                 now += 1000 / 60;
                 if (typeof mapboxgl.setNow === "function") mapboxgl.setNow(now);
                 const elapsed = now - startTime;
-                if (elapsed >= durationMsTotal || elapsed >= maxElapsed) {
+                if (elapsed >= maxElapsed) {
+                  done();
+                  return;
+                }
+                if (elapsed >= fullDurationMs) {
+                  updateAnimationFrame(
+                    map,
+                    line,
+                    pathDistance,
+                    1,
+                    optsAtElapsed(fullDurationMs),
+                  );
+                  map.triggerRepaint();
                   done();
                   return;
                 }
                 const animationPhase = pathProgressAt(elapsed);
-                if (animationPhase >= 0.9999) {
-                  done();
-                  return;
-                }
                 updateAnimationFrame(
                   map,
                   line,
@@ -2181,13 +2252,20 @@
             }
             if (!startTime) startTime = currentTime;
             const elapsed = currentTime - startTime;
-            const animationPhase = pathProgressAt(elapsed);
 
-            if (animationPhase >= 1) {
+            if (elapsed >= fullDurationMs) {
+              updateAnimationFrame(
+                map,
+                line,
+                pathDistance,
+                1,
+                optsAtElapsed(Math.min(elapsed, fullDurationMs)),
+              );
               resolve();
               return;
             }
 
+            const animationPhase = pathProgressAt(elapsed);
             updateAnimationFrame(
               map,
               line,
@@ -2694,7 +2772,7 @@
             manualLegDurations: manualDurations ?? undefined,
             startBearing: TRIPRENDER_DEFAULT_BEARING,
             startAltitude:
-              Number(document.getElementById("startAltitude").value) || 500000,
+              Number(document.getElementById("startAltitude").value) || 400000,
             pitch: TRIPRENDER_DEFAULT_PITCH,
             lineGradient: document.getElementById("lineGradient").checked,
             cameraFollow: document.getElementById("cameraFollow").checked,
@@ -3088,7 +3166,7 @@
           const speedupExport = TRIPRENDER_SPEEDUP;
           const startBearingExport = TRIPRENDER_DEFAULT_BEARING;
           const startAltitudeExport =
-            Number(document.getElementById("startAltitude").value) || 500000;
+            Number(document.getElementById("startAltitude").value) || 400000;
           const pitchExport = TRIPRENDER_DEFAULT_PITCH;
           const lineGradientExport =
             document.getElementById("lineGradient").checked;
