@@ -971,42 +971,97 @@
     <script>
       mapboxgl.accessToken = "__MAPBOX_TOKEN__";
 
+      const savedNightMode = localStorage.getItem("nightMode") === "1";
       const map = new mapboxgl.Map({
         container: "map",
-        style: "mapbox://styles/mapbox/standard",
+        style: savedNightMode
+          ? "mapbox://styles/mapbox/dark-v11"
+          : "mapbox://styles/mapbox/streets-v12",
         center: [-74.5, 40],
         zoom: 4,
+        preserveDrawingBuffer: true,
       });
 
-      const nightModeCheckbox = document.getElementById("nightMode");
+      let currentRoute = null;
+
+      function removeRouteLayerOnly() {
+        if (map.getLayer("route")) map.removeLayer("route");
+        if (map.getSource("route")) map.removeSource("route");
+      }
+
+      function addRouteLayerFromCoords(coords) {
+        removeRouteLayerOnly();
+        map.addSource("route", {
+          type: "geojson",
+          data: {
+            type: "Feature",
+            geometry: { type: "LineString", coordinates: coords },
+          },
+          lineMetrics: true,
+        });
+        map.addLayer({
+          id: "route",
+          type: "line",
+          source: "route",
+          paint: {
+            "line-gradient": [
+              "step",
+              ["line-progress"],
+              "#3b9dd2",
+              1,
+              "rgba(0,0,0,0)",
+            ],
+            "line-width": 6,
+            "line-emissive-strength": 0.8,
+          },
+          layout: { "line-cap": "round", "line-join": "round" },
+        });
+      }
+
+      function restoreRouteLayerIfNeeded() {
+        if (!currentRoute || !currentRoute.geometry) return;
+        const coords = currentRoute.geometry.coordinates;
+        if (!coords || !coords.length) return;
+        addRouteLayerFromCoords(coords);
+      }
 
       function applyNightMode(checked) {
         document.body.classList.toggle("night-mode", checked);
-        const setMapPreset = () =>
-          map.setConfigProperty(
-            "basemap",
-            "lightPreset",
-            checked ? "night" : "day",
-          );
-        if (map.isStyleLoaded()) {
-          setMapPreset();
-        } else {
-          map.once("load", setMapPreset);
-        }
+        const nextUrl = checked
+          ? "mapbox://styles/mapbox/dark-v11"
+          : "mapbox://styles/mapbox/streets-v12";
+        map.setStyle(nextUrl);
+        map.once("load", function () {
+          try {
+            map.resize();
+          } catch (_) {}
+          restoreRouteLayerIfNeeded();
+        });
         try {
           localStorage.setItem("nightMode", checked ? "1" : "0");
         } catch (_) {}
       }
 
-      const savedNightMode = localStorage.getItem("nightMode") === "1";
+      if (typeof map.loaded === "function" && map.loaded()) {
+        try {
+          map.resize();
+        } catch (_) {}
+      } else {
+        map.once("load", function () {
+          try {
+            map.resize();
+          } catch (_) {}
+        });
+      }
+
+      const nightModeCheckbox = document.getElementById("nightMode");
       nightModeCheckbox.checked = savedNightMode;
-      applyNightMode(savedNightMode);
+      document.body.classList.toggle("night-mode", savedNightMode);
 
       nightModeCheckbox.addEventListener("change", (e) => {
         applyNightMode(e.target.checked);
       });
 
-      let currentRoute = null;
       let animationState = "idle"; // "idle" | "playing" | "paused"
       let animationControls = { stopRequested: false, pauseRequested: false };
       let exportInProgress = false;
@@ -1538,7 +1593,9 @@
           ? turf.lineString(path.geometry.coordinates.slice())
           : path;
         const pathDistance = turf.length(line, { units: "kilometers" });
-        const legEndProgress = path.properties?.legEndProgress ?? [1];
+        const rawLegEnd = path.properties?.legEndProgress;
+        const legEndProgress =
+          Array.isArray(rawLegEnd) && rawLegEnd.length > 0 ? rawLegEnd : [1];
         const legLengths = path.properties?.legLengths ?? null;
         const numLegs = legEndProgress.length;
         const useManual =
@@ -2084,36 +2141,11 @@
                     totalPathKm,
                 );
 
-          if (map.getLayer("route")) map.removeLayer("route");
-          if (map.getSource("route")) map.removeSource("route");
+          removeRouteLayerOnly();
           currentRoute = null;
           updateAnimationUI();
 
-          map.addSource("route", {
-            type: "geojson",
-            data: {
-              type: "Feature",
-              geometry: { type: "LineString", coordinates: route },
-            },
-            lineMetrics: true,
-          });
-          map.addLayer({
-            id: "route",
-            type: "line",
-            source: "route",
-            paint: {
-              "line-gradient": [
-                "step",
-                ["line-progress"],
-                "#3b9dd2",
-                1,
-                "rgba(0,0,0,0)",
-              ],
-              "line-width": 6,
-              "line-emissive-strength": 0.8,
-            },
-            layout: { "line-cap": "round", "line-join": "round" },
-          });
+          addRouteLayerFromCoords(route);
 
           currentRoute = {
             type: "Feature",
@@ -2456,6 +2488,61 @@
         });
       }
 
+      function waitDoubleRaf() {
+        return new Promise(function (resolve) {
+          requestAnimationFrame(function () {
+            requestAnimationFrame(resolve);
+          });
+        });
+      }
+
+      /**
+       * Wait for tiles/GPU using repaint + rAF only. Do not use map.once("idle") here:
+       * in Tauri/WebKit, "idle" often does not fire until the user pans/zooms, which blocks
+       * export indefinitely and prevents status updates ("Loading encoder…", "Done…").
+       */
+      async function settleMapWithRepaint(map, paintCycles) {
+        var n =
+          paintCycles == null ? 28 : Math.max(4, Math.floor(paintCycles));
+        var i;
+        for (i = 0; i < n; i++) {
+          map.triggerRepaint();
+          await new Promise(function (r) {
+            requestAnimationFrame(r);
+          });
+        }
+        await waitDoubleRaf();
+      }
+
+      /** Extra pixels around export resolution; edges are cropped from readPixels so tile-loading seams often fall outside the frame. */
+      var EXPORT_OVERSCAN = 1.12;
+      /**
+       * After centering the crop, shift it along Y (WebGL bottom-origin) so more of the
+       * top of the buffer is discarded — typical forward/travel direction in pitched views.
+       */
+      var EXPORT_CROP_FORWARD_BIAS = 0.14;
+
+      /** Short monotonic scrub along the route to warm tiles before encode (reduces white flashes). */
+      async function exportCameraPreRoll(map, line, pathDistance, opts) {
+        var steps = 18;
+        var s;
+        for (s = 1; s <= steps; s++) {
+          var phase = (s / steps) * 0.06;
+          updateAnimationFrame(map, line, pathDistance, phase, opts);
+          map.triggerRepaint();
+          await new Promise(function (r) {
+            requestAnimationFrame(r);
+          });
+        }
+        _previousCameraPosition = null;
+        _previousCameraTarget = null;
+        updateAnimationFrame(map, line, pathDistance, 0, opts);
+        map.triggerRepaint();
+        await new Promise(function (r) {
+          requestAnimationFrame(r);
+        });
+      }
+
       async function exportVideo() {
         if (!currentRoute) return;
         var proceed = await triprenderShowExportPreflight();
@@ -2485,91 +2572,180 @@
         exportBtn.disabled = true;
 
         try {
-          const [encoderModule, simdModule] = await Promise.all([
-            import("https://unpkg.com/mp4-h264@1.0.7/build/mp4-encoder.js"),
-            import("https://unpkg.com/wasm-feature-detect?module"),
-          ]);
+          var exportWakeRaf = 0;
+          function exportWakeTick() {
+            map.triggerRepaint();
+            exportWakeRaf = requestAnimationFrame(exportWakeTick);
+          }
+          exportWakeRaf = requestAnimationFrame(exportWakeTick);
+          const encoderModule = await import(
+            "https://unpkg.com/mp4-h264@1.0.7/build/mp4-encoder.js",
+          );
           const loadEncoder = encoderModule.default;
-          const supportsSIMD = await simdModule.simd();
-          const isIOSLikeUA =
-            /iPhone|iPad|iPod/i.test(navigator.userAgent || "") ||
-            (navigator.platform === "MacIntel" &&
-              navigator.maxTouchPoints > 1);
-          const useSimd = supportsSIMD && !isIOSLikeUA;
-          const Encoder = await loadEncoder({ simd: useSimd });
+          /** Scalar WASM avoids empty mux output with mp4-h264 in some WebKit/Tauri builds. */
+          const Encoder = await loadEncoder({ simd: false });
 
           const sizeStr = document.getElementById("exportSize").value;
           const [width, height] = sizeStr.split("x").map(Number);
 
-          mapEl.style.width = width + "px";
-          mapEl.style.height = height + "px";
+          var bufW = Math.max(2, Math.ceil(width * EXPORT_OVERSCAN));
+          var bufH = Math.max(2, Math.ceil(height * EXPORT_OVERSCAN));
+          mapEl.style.width = bufW + "px";
+          mapEl.style.height = bufH + "px";
           map.resize();
 
           const scale = Math.min(
-            window.innerWidth / width,
-            window.innerHeight / height,
+            window.innerWidth / bufW,
+            window.innerHeight / bufH,
           );
           mapEl.style.transform = "scale(" + scale + ")";
           mapEl.style.transformOrigin = "center center";
 
-          await map.once("idle");
+          await settleMapWithRepaint(map, 26);
+
+          const maxTimePerStepExport =
+            (Number(document.getElementById("maxTimePerStep").value) || 2) *
+            1000;
+          const speedupExport =
+            Number(document.getElementById("speedup")?.value) || 4;
+          const startBearingExport =
+            Number(document.getElementById("startBearing").value) || 0;
+          const startAltitudeExport =
+            Number(document.getElementById("startAltitude").value) || 500000;
+          const pitchExport =
+            Number(document.getElementById("pitch").value) || 20;
+          const lineGradientExport =
+            document.getElementById("lineGradient").checked;
+          const cameraFollowExport =
+            document.getElementById("cameraFollow").checked;
+          const bearingChangeExport =
+            document.getElementById("bearingChange").checked;
+
+          const warmLine = currentRoute.geometry
+            ? turf.lineString(currentRoute.geometry.coordinates.slice())
+            : null;
+          const warmPathDistance = warmLine
+            ? turf.length(warmLine, { units: "kilometers" })
+            : 0;
+          const warmOpts = {
+            startBearing: startBearingExport,
+            startAltitude: startAltitudeExport,
+            pitch: pitchExport,
+            lineGradient: lineGradientExport,
+            cameraFollow: cameraFollowExport,
+            bearingChange: bearingChangeExport,
+          };
+          _previousCameraPosition = null;
+          _previousCameraTarget = null;
+          updateAnimationFrame(
+            map,
+            warmLine,
+            warmPathDistance,
+            0,
+            warmOpts,
+          );
+          map.triggerRepaint();
+          await exportCameraPreRoll(map, warmLine, warmPathDistance, warmOpts);
+          await settleMapWithRepaint(map, 14);
+
+          if (exportWakeRaf) {
+            cancelAnimationFrame(exportWakeRaf);
+            exportWakeRaf = 0;
+          }
 
           const gl = map.painter.context.gl;
-          // H.264 needs even dimensions; iOS can report odd drawingBuffer width — fixes tiny/invalid MP4 on Photos.
-          let glWidth = gl.drawingBufferWidth;
-          let glHeight = gl.drawingBufferHeight;
-          if (glWidth >= 2 && (glWidth & 1)) glWidth--;
-          if (glHeight >= 2 && (glHeight & 1)) glHeight--;
+          let glFullW = gl.drawingBufferWidth;
+          let glFullH = gl.drawingBufferHeight;
+          if (glFullW >= 2 && (glFullW & 1)) glFullW--;
+          if (glFullH >= 2 && (glFullH & 1)) glFullH--;
+
+          if (!glFullW || !glFullH) {
+            throw new Error(
+              "Map canvas has zero size after resize; cannot export video.",
+            );
+          }
+
+          var targetW = width;
+          var targetH = height;
+          if (targetW >= 2 && (targetW & 1)) targetW--;
+          if (targetH >= 2 && (targetH & 1)) targetH--;
+          targetW = Math.min(targetW, glFullW);
+          targetH = Math.min(targetH, glFullH);
+          if (targetW < 2 || targetH < 2) {
+            throw new Error(
+              "Export size is too large for the current GL buffer; pick a smaller export size.",
+            );
+          }
+
+          var excessX = glFullW - targetW;
+          var excessY = glFullH - targetH;
+          var cropX = Math.max(0, Math.floor(excessX * 0.5));
+          var cropY = Math.max(
+            0,
+            Math.floor(excessY * (0.5 - EXPORT_CROP_FORWARD_BIAS)),
+          );
+          if (cropY + targetH > glFullH) {
+            cropY = Math.max(0, glFullH - targetH);
+          }
+
+          gl.pixelStorei(gl.PACK_ALIGNMENT, 1);
 
           const encoder = Encoder.create({
-            width: glWidth,
-            height: glHeight,
+            width: targetW,
+            height: targetH,
             fps: 60,
-            kbps: 64000,
             rgbFlipY: true,
             sequential: true,
           });
           // sequential: true = moov atom before mdat (Apple/Safari requirement for playback and Save to Photos)
 
-          const ptr = encoder.getRGBPointer();
+          const rgbByteLen = targetW * targetH * 4;
 
+          /** JS-heap buffer: readPixels into WASM HEAPU8 can yield empty video on WebKit/Tauri. */
+          var exportRgbScratch = null;
           const captureFrame = () => {
-            const pixels = encoder.memory().subarray(ptr);
+            if (!exportRgbScratch || exportRgbScratch.length !== rgbByteLen) {
+              exportRgbScratch = new Uint8Array(rgbByteLen);
+            }
+            if (gl.READ_FRAMEBUFFER !== undefined) {
+              gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
+            } else {
+              gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            }
             gl.readPixels(
-              0,
-              0,
-              glWidth,
-              glHeight,
+              cropX,
+              cropY,
+              targetW,
+              targetH,
               gl.RGBA,
               gl.UNSIGNED_BYTE,
-              pixels,
+              exportRgbScratch,
             );
-            encoder.encodeRGBPointer();
+            encoder.encodeRGB(exportRgbScratch);
           };
 
           setExportStatus("Exporting...");
 
-          const legEndProgressExport = currentRoute?.properties
-            ?.legEndProgress ?? [1];
+          const rawLegEndExport = currentRoute?.properties?.legEndProgress;
+          const legEndProgressExport =
+            Array.isArray(rawLegEndExport) && rawLegEndExport.length > 0
+              ? rawLegEndExport
+              : [1];
           const manualDurationsExport = getManualLegDurationsForAnimation(
             legEndProgressExport.length,
           );
           await animatePath({
             map,
             path: currentRoute,
-            maxTimePerStep:
-              (Number(document.getElementById("maxTimePerStep").value) || 2) *
-              1000,
-            speedup: Number(document.getElementById("speedup")?.value) || 4,
+            maxTimePerStep: maxTimePerStepExport,
+            speedup: speedupExport,
             manualLegDurations: manualDurationsExport ?? undefined,
-            startBearing:
-              Number(document.getElementById("startBearing").value) || 0,
-            startAltitude:
-              Number(document.getElementById("startAltitude").value) || 500000,
-            pitch: Number(document.getElementById("pitch").value) || 20,
-            lineGradient: document.getElementById("lineGradient").checked,
-            cameraFollow: document.getElementById("cameraFollow").checked,
-            bearingChange: document.getElementById("bearingChange").checked,
+            startBearing: startBearingExport,
+            startAltitude: startAltitudeExport,
+            pitch: pitchExport,
+            lineGradient: lineGradientExport,
+            cameraFollow: cameraFollowExport,
+            bearingChange: bearingChangeExport,
             exportMode: true,
             onProgress: (p) => {
               setExportStatus("Exporting... " + Math.round(p * 100) + "%");
@@ -2765,17 +2941,24 @@
           exportResult.error = (err && err.message) || String(err);
           setExportStatus("Error: " + exportResult.error);
         } finally {
+          if (exportWakeRaf) {
+            cancelAnimationFrame(exportWakeRaf);
+            exportWakeRaf = 0;
+          }
+          mapEl.style.width = savedWidth;
+          mapEl.style.height = savedHeight;
+          mapEl.style.transform = "";
+          mapEl.style.transformOrigin = "";
+          map.resize();
+          try {
+            await settleMapWithRepaint(map, 18);
+          } catch (_) {}
           document.body.classList.remove("exporting");
           if (exportOverlay) exportOverlay.classList.remove("visible");
           const overlayStatusEl = document.getElementById(
             "exportOverlayStatus",
           );
           if (overlayStatusEl) overlayStatusEl.textContent = "";
-          mapEl.style.width = savedWidth;
-          mapEl.style.height = savedHeight;
-          mapEl.style.transform = "";
-          mapEl.style.transformOrigin = "";
-          map.resize();
           exportBtn.disabled = false;
           exportInProgress = false;
           updateAnimationUI();
