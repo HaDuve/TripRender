@@ -862,51 +862,24 @@
                   step="0.1"
                 />
               </div>
-              <div class="control-row">
-                <label for="maxTimePerStep">Max time per step (s)</label>
-                <input
-                  type="number"
-                  id="maxTimePerStep"
-                  value="2"
-                  min="0.1"
-                  step="0.1"
-                />
-              </div>
-              <div class="control-row">
-                <label for="speedup">Max speedup (1–4)</label>
-                <input
-                  type="number"
-                  id="speedup"
-                  value="4"
-                  min="1"
-                  max="4"
-                  step="1"
-                />
-              </div>
-              <div class="control-row">
-                <label for="startBearing">Bearing (°)</label>
-                <input
-                  type="number"
-                  id="startBearing"
-                  value="0"
-                  min="-180"
-                  max="180"
-                />
-              </div>
-              <div class="control-row">
-                <label for="startAltitude">Altitude (m)</label>
-                <input
-                  type="number"
-                  id="startAltitude"
-                  value="500000"
-                  min="100"
-                  step="100"
-                />
-              </div>
-              <div class="control-row">
-                <label for="pitch">Pitch (°)</label>
-                <input type="number" id="pitch" value="20" min="0" max="85" />
-              </div>
+              <input
+                type="number"
+                id="maxTimePerStep"
+                value="2"
+                min="0.1"
+                step="0.1"
+                hidden
+                aria-hidden="true"
+              />
+              <input
+                type="number"
+                id="startAltitude"
+                value="500000"
+                min="100"
+                step="100"
+                hidden
+                aria-hidden="true"
+              />
               <div class="control-row">
                 <label for="exportSize">Export size</label>
                 <select id="exportSize">
@@ -1082,6 +1055,18 @@
         updateAnimationUI();
       }
 
+      /** Timing / camera fields: route geometry is still valid — do not clear the map route. */
+      function onAnimationParamChange() {
+        const legs = currentRoute?.properties?.legLengths;
+        if (legs?.length) {
+          if (!document.getElementById("editDurationsManually")?.checked) {
+            applyDerivedMaxTimeFromDuration();
+          }
+          applyAutoAltitude();
+        }
+        updateAnimationUI();
+      }
+
       function updateAnimationUI() {
         if (!currentRoute) {
           if (map.getLayer("route")) map.removeLayer("route");
@@ -1129,6 +1114,11 @@
 
       function lerp(start, end, amt) {
         return (1 - amt) * start + amt * end;
+      }
+
+      function smoothstep(t) {
+        const x = Math.max(0, Math.min(1, t));
+        return x * x * (3 - 2 * x);
       }
 
       // --- Mercator & camera math (see Mapbox blog: building-cinematic-route-animations-with-mapboxgl) ---
@@ -1334,6 +1324,86 @@
       const MIN_LEG_DURATION_MS = 100;
       const MAX_LEG_DURATION_MS = 60000;
 
+      /** Fixed getLegDurations spread; speedup control removed from UI. */
+      const TRIPRENDER_SPEEDUP = 1;
+      const TRIPRENDER_DEFAULT_BEARING = 0;
+      const TRIPRENDER_DEFAULT_PITCH = 20;
+
+      /**
+       * Inverse of summing getLegDurations: given total duration and leg lengths,
+       * returns the cap maxTimePerStep (ms) used by getLegDurations.
+       * sum_i d_i = maxMs * ( n*r + (1-r)*S/Lmax ), r = 1/speedup.
+       */
+      function maxTimePerStepMsFromTotalDuration(
+        durationMs,
+        legLengthsKm,
+        speedup,
+      ) {
+        const n = legLengthsKm?.length ?? 0;
+        if (!n || !Number.isFinite(durationMs) || durationMs <= 0) return 2000;
+        const Lmax = Math.max(...legLengthsKm, 1e-12);
+        const S = legLengthsKm.reduce((a, b) => a + b, 0);
+        const sp = Math.max(1, Number(speedup) || 1);
+        const r = 1 / sp;
+        const denom = n * r + ((1 - r) * S) / Lmax;
+        if (!Number.isFinite(denom) || denom <= 0) return 2000;
+        let maxMs = durationMs / denom;
+        const minMs = MIN_LEG_DURATION_MS * sp;
+        maxMs = Math.max(minMs, Math.min(MAX_LEG_DURATION_MS, maxMs));
+        return maxMs;
+      }
+
+      function applyDerivedMaxTimeFromDuration() {
+        const legLengths = currentRoute?.properties?.legLengths;
+        if (!legLengths?.length) return;
+        const durationMs =
+          (Number(document.getElementById("duration")?.value) || 2) * 1000;
+        const maxMs = maxTimePerStepMsFromTotalDuration(
+          durationMs,
+          legLengths,
+          TRIPRENDER_SPEEDUP,
+        );
+        const el = document.getElementById("maxTimePerStep");
+        if (el) el.value = Math.round((maxMs / 1000) * 100) / 100;
+      }
+
+      /** Nominal vertical FOV (deg) for visibility estimate; tune with scene. */
+      const MAP_NOMINAL_VERTICAL_FOV_DEG = 50;
+
+      /**
+       * Altitude so roughly half of the longest leg is visible (approximate perspective).
+       * Uses same pitch convention as computeCameraPosition: pitchRad = (90 - pitch)°.
+       */
+      function computeAutoAltitudeMeters(legLengthsKm, pitchDeg) {
+        const longestKm = Math.max(...(legLengthsKm || [0]), 1e-9);
+        const L = longestKm * 1000;
+        const halfLegVisible = 0.5 * L;
+        const pitch = Math.max(0, Math.min(85, Number(pitchDeg) || 20));
+        const pitchRad = ((90 - pitch) * Math.PI) / 180;
+        const fovRad = (MAP_NOMINAL_VERTICAL_FOV_DEG * Math.PI) / 180;
+        if (pitchRad <= 0.01 || fovRad <= 0)
+          return Math.round(
+            Math.max(50000, Math.min(2000000, longestKm * 1.5e6)),
+          );
+        const tanHalfFov = Math.tan(fovRad / 2);
+        const sinPitch = Math.sin(pitchRad);
+        const denom = 2 * tanHalfFov * sinPitch;
+        if (denom <= 1e-9) return 500000;
+        const h = halfLegVisible / denom;
+        return Math.round(Math.max(50000, Math.min(2000000, h)));
+      }
+
+      function applyAutoAltitude() {
+        const legLengths = currentRoute?.properties?.legLengths;
+        if (!legLengths?.length) return;
+        const alt = computeAutoAltitudeMeters(
+          legLengths,
+          TRIPRENDER_DEFAULT_PITCH,
+        );
+        const el = document.getElementById("startAltitude");
+        if (el) el.value = alt;
+      }
+
       function syncDurationFromLegInputs() {
         const inputs = document.querySelectorAll(
           "#waypoints .leg-duration-input",
@@ -1361,12 +1431,18 @@
         if (!numLegs) return;
         if (currentRoute?.properties?.legLengths) {
           const legLengths = currentRoute.properties.legLengths;
-          const maxTimePerStepMs =
-            (Number(document.getElementById("maxTimePerStep")?.value) || 2) *
-            1000;
-          const speedup =
-            Number(document.getElementById("speedup")?.value) || 4;
-          const durs = getLegDurations(legLengths, maxTimePerStepMs, speedup);
+          const durationMs =
+            (Number(document.getElementById("duration")?.value) || 2) * 1000;
+          const maxTimePerStepMs = maxTimePerStepMsFromTotalDuration(
+            durationMs,
+            legLengths,
+            TRIPRENDER_SPEEDUP,
+          );
+          const durs = getLegDurations(
+            legLengths,
+            maxTimePerStepMs,
+            TRIPRENDER_SPEEDUP,
+          );
           if (durs && durs.length === numLegs) {
             inputs.forEach((el, i) => {
               el.value = Math.round((durs[i] / 1000) * 10) / 10;
@@ -1392,26 +1468,27 @@
         cb.addEventListener("change", () => {
           document.body.classList.toggle("manual-leg-durations", cb.checked);
           if (cb.checked) syncManualLegDurationsFromRoute();
-          setAnimationDirty();
+          onAnimationParamChange();
         });
         document.getElementById("waypoints").addEventListener("input", (e) => {
           if (!e.target.classList.contains("leg-duration-input")) return;
           syncDurationFromLegInputs();
-          setAnimationDirty();
+          onAnimationParamChange();
         });
         document.getElementById("waypoints").addEventListener("change", (e) => {
           if (!e.target.classList.contains("leg-duration-input")) return;
           syncDurationFromLegInputs();
-          setAnimationDirty();
+          onAnimationParamChange();
         });
       })();
 
       (function initAnimationTimingListeners() {
-        ["duration", "maxTimePerStep", "speedup"].forEach((id) => {
+        ["duration"].forEach((id) => {
           const el = document.getElementById(id);
           if (!el) return;
-          el.addEventListener("change", setAnimationDirty);
-          el.addEventListener("input", setAnimationDirty);
+          const onTiming = () => onAnimationParamChange();
+          el.addEventListener("change", onTiming);
+          el.addEventListener("input", onTiming);
         });
       })();
 
@@ -1449,7 +1526,155 @@
         return legLengths.map((len) => minDur + range * (len / maxLegLength));
       }
 
-      function timeToProgress(
+      /** Shortest leg uses this fraction of base altitude; longest leg uses full base altitude. */
+      const SHORT_LEG_ALTITUDE_RATIO = 0.2;
+      /** Used only by animationOptsForPathPhase (export pre-roll / warm frames). */
+      const LEG_ALTITUDE_BLEND_PORTION = 0.3;
+
+      /** Hold path progress while altitude catches up: 0.01s (10ms) per 10km altitude delta. */
+      const ALTITUDE_BLEND_MS_PER_10KM = 10;
+
+      function altitudeBlendDurationMs(fromAltM, toAltM) {
+        const d = Math.abs(Number(toAltM) - Number(fromAltM));
+        if (!Number.isFinite(d) || d <= 0) return 0;
+        return (d / 10000) * ALTITUDE_BLEND_MS_PER_10KM;
+      }
+
+      /**
+       * Per leg: (1) blend altitude with path fixed at leg start, (2) move along leg at target altitude.
+       */
+      function animationStateAtElapsed(
+        elapsedMs,
+        legEndProgress,
+        legDurationsMs,
+        startAltitudeM,
+        legTargetAltitudes,
+      ) {
+        const n = legEndProgress?.length ?? 0;
+        if (
+          !n ||
+          !legTargetAltitudes?.length ||
+          legTargetAltitudes.length !== n ||
+          !legDurationsMs ||
+          legDurationsMs.length !== n
+        ) {
+          return { pathProgress: 0, currentAltitude: startAltitudeM };
+        }
+        let t = 0;
+        for (let i = 0; i < n; i++) {
+          const fromAlt = i === 0 ? startAltitudeM : legTargetAltitudes[i - 1];
+          const toAlt = legTargetAltitudes[i];
+          const blendMs = altitudeBlendDurationMs(fromAlt, toAlt);
+          const progressStart = i === 0 ? 0 : legEndProgress[i - 1];
+          const progressEnd = legEndProgress[i];
+
+          if (elapsedMs < t + blendMs) {
+            const u = blendMs <= 0 ? 1 : (elapsedMs - t) / blendMs;
+            const alt = lerp(
+              fromAlt,
+              toAlt,
+              smoothstep(Math.max(0, Math.min(1, u))),
+            );
+            return { pathProgress: progressStart, currentAltitude: alt };
+          }
+          t += blendMs;
+
+          const moveMs = legDurationsMs[i];
+          if (elapsedMs < t + moveMs) {
+            const u = moveMs <= 0 ? 1 : (elapsedMs - t) / moveMs;
+            const pathProgress =
+              progressStart + u * (progressEnd - progressStart);
+            return { pathProgress, currentAltitude: toAlt };
+          }
+          t += moveMs;
+        }
+        return {
+          pathProgress: 1,
+          currentAltitude: legTargetAltitudes[n - 1],
+        };
+      }
+
+      function computeLegTargetAltitudes(baseAltitudeM, legLengthsKm) {
+        if (!legLengthsKm?.length) return [];
+        const minLen = Math.min(...legLengthsKm);
+        const maxLen = Math.max(...legLengthsKm);
+        const minAlt = baseAltitudeM * SHORT_LEG_ALTITUDE_RATIO;
+        if (
+          maxLen <= minLen ||
+          !Number.isFinite(minLen) ||
+          !Number.isFinite(maxLen)
+        )
+          return legLengthsKm.map(() => baseAltitudeM);
+        const span = maxLen - minLen;
+        return legLengthsKm.map((len) => {
+          const t = (len - minLen) / span;
+          return lerp(minAlt, baseAltitudeM, t);
+        });
+      }
+
+      function currentAltitudeForLegState(
+        baseAltitudeM,
+        targets,
+        legIndex,
+        tInLeg,
+        blendPortion = LEG_ALTITUDE_BLEND_PORTION,
+      ) {
+        if (!targets?.length) return baseAltitudeM;
+        const i = Math.max(0, Math.min(targets.length - 1, legIndex));
+        const from = i === 0 ? baseAltitudeM : targets[i - 1];
+        const to = targets[i];
+        if (tInLeg < blendPortion) {
+          const u = smoothstep(tInLeg / blendPortion);
+          return lerp(from, to, u);
+        }
+        return to;
+      }
+
+      /** Map path progress 0..1 to leg index and time-like fraction within that leg (for altitude when only phase is known). */
+      function legContextFromPathProgress(pathProgress, legEndProgress) {
+        const numLegs = legEndProgress.length;
+        if (numLegs === 0) return { legIndex: 0, tInLeg: 1 };
+        const p = Math.max(0, Math.min(1, pathProgress));
+        if (p <= 0) return { legIndex: 0, tInLeg: 0 };
+        let legIndex = 0;
+        for (let i = 0; i < numLegs; i++) {
+          if (p <= legEndProgress[i]) {
+            legIndex = i;
+            break;
+          }
+          legIndex = i;
+        }
+        const progressStart = legIndex === 0 ? 0 : legEndProgress[legIndex - 1];
+        const progressEnd = legEndProgress[legIndex];
+        const span = progressEnd - progressStart;
+        const tInLeg = span > 1e-12 ? (p - progressStart) / span : 1;
+        return { legIndex, tInLeg };
+      }
+
+      function animationOptsForPathPhase(
+        baseOpts,
+        pathPhase,
+        baseAltitudeM,
+        legEndProgress,
+        legTargetAltitudes,
+      ) {
+        if (!legTargetAltitudes?.length) return baseOpts;
+        const { legIndex, tInLeg } = legContextFromPathProgress(
+          pathPhase,
+          legEndProgress,
+        );
+        return {
+          ...baseOpts,
+          currentAltitude: currentAltitudeForLegState(
+            baseAltitudeM,
+            legTargetAltitudes,
+            legIndex,
+            tInLeg,
+          ),
+        };
+      }
+
+      function elapsedToLegContext(
         elapsedMs,
         legEndProgress,
         legLengths,
@@ -1458,7 +1683,7 @@
         overrideLegDurations,
       ) {
         const numLegs = legEndProgress.length;
-        if (numLegs === 0) return 1;
+        if (numLegs === 0) return { pathProgress: 1, legIndex: 0, tInLeg: 1 };
         const safeMax = Math.max(0, Number(maxTimePerStep) || 2000);
         const legDurations =
           overrideLegDurations &&
@@ -1473,8 +1698,13 @@
           !Number.isFinite(totalDuration) ||
           totalDuration <= 0 ||
           elapsedMs >= totalDuration
-        )
-          return 1;
+        ) {
+          return {
+            pathProgress: 1,
+            legIndex: Math.max(0, numLegs - 1),
+            tInLeg: 1,
+          };
+        }
         const durs = legDurations ?? legEndProgress.map(() => safeMax);
         let cum = 0;
         let legIndex = 0;
@@ -1493,7 +1723,27 @@
             : (elapsedMs - cum) / legDur;
         const progressStart = legIndex === 0 ? 0 : legEndProgress[legIndex - 1];
         const progressEnd = legEndProgress[legIndex];
-        return progressStart + tInLeg * (progressEnd - progressStart);
+        const pathProgress =
+          progressStart + tInLeg * (progressEnd - progressStart);
+        return { pathProgress, legIndex, tInLeg };
+      }
+
+      function timeToProgress(
+        elapsedMs,
+        legEndProgress,
+        legLengths,
+        maxTimePerStep,
+        speedup,
+        overrideLegDurations,
+      ) {
+        return elapsedToLegContext(
+          elapsedMs,
+          legEndProgress,
+          legLengths,
+          maxTimePerStep,
+          speedup,
+          overrideLegDurations,
+        ).pathProgress;
       }
 
       function updateAnimationFrame(
@@ -1506,11 +1756,16 @@
         const {
           startBearing,
           startAltitude,
+          currentAltitude,
           pitch,
           lineGradient,
           cameraFollow,
           bearingChange,
         } = opts;
+        const altitude =
+          currentAltitude != null && Number.isFinite(currentAltitude)
+            ? currentAltitude
+            : startAltitude;
         if (lineGradient) {
           map.setPaintProperty("route", "line-gradient", [
             "step",
@@ -1552,14 +1807,14 @@
             effectivePitch,
             startBearing,
             targetPosition,
-            startAltitude,
+            altitude,
             false,
             1,
           );
           const camera = map.getFreeCameraOptions();
           camera.position = mapboxgl.MercatorCoordinate.fromLngLat(
             [cameraPos.lng, cameraPos.lat],
-            startAltitude,
+            altitude,
           );
           camera.setPitchBearing(effectivePitch, startBearing);
           map.setFreeCameraOptions(camera);
@@ -1607,7 +1862,7 @@
         const legDurations = useManual
           ? manualLegDurations
           : getLegDurations(legLengths, maxTimePerStep, speedup);
-        const duration = legDurations
+        const moveDurationMs = legDurations
           ? legDurations.reduce((a, b) => a + b, 0)
           : numLegs * maxTimePerStep;
         const overrideDurs = useManual ? legDurations : null;
@@ -1619,13 +1874,88 @@
           cameraFollow,
           bearingChange,
         };
+        const legTargetAltitudes =
+          legLengths?.length === numLegs && numLegs > 0
+            ? computeLegTargetAltitudes(startAltitude, legLengths)
+            : null;
+
+        const useAltitudeTimeline = !!(
+          legTargetAltitudes?.length &&
+          legDurations &&
+          legDurations.length === numLegs
+        );
+        let altitudeHoldMs = 0;
+        if (useAltitudeTimeline) {
+          for (let i = 0; i < numLegs; i++) {
+            const fromA = i === 0 ? startAltitude : legTargetAltitudes[i - 1];
+            const toA = legTargetAltitudes[i];
+            altitudeHoldMs += altitudeBlendDurationMs(fromA, toA);
+          }
+        }
+        const durationMsTotal = useAltitudeTimeline
+          ? altitudeHoldMs + moveDurationMs
+          : moveDurationMs;
+
+        function pathProgressAt(elapsedMs) {
+          if (useAltitudeTimeline) {
+            return animationStateAtElapsed(
+              elapsedMs,
+              legEndProgress,
+              legDurations,
+              startAltitude,
+              legTargetAltitudes,
+            ).pathProgress;
+          }
+          return timeToProgress(
+            elapsedMs,
+            legEndProgress,
+            legLengths,
+            maxTimePerStep,
+            speedup,
+            overrideDurs,
+          );
+        }
+
+        function optsAtElapsed(elapsedMs) {
+          if (!legTargetAltitudes?.length) return opts;
+          if (useAltitudeTimeline) {
+            const st = animationStateAtElapsed(
+              elapsedMs,
+              legEndProgress,
+              legDurations,
+              startAltitude,
+              legTargetAltitudes,
+            );
+            return { ...opts, currentAltitude: st.currentAltitude };
+          }
+          const ctx = elapsedToLegContext(
+            elapsedMs,
+            legEndProgress,
+            legLengths,
+            maxTimePerStep,
+            speedup,
+            overrideDurs,
+          );
+          return {
+            ...opts,
+            currentAltitude: currentAltitudeForLegState(
+              startAltitude,
+              legTargetAltitudes,
+              ctx.legIndex,
+              ctx.tInLeg,
+            ),
+          };
+        }
 
         if (exportMode) {
           return new Promise((resolve) => {
             let now =
               typeof performance !== "undefined" ? performance.now() : 0;
             const startTime = now;
-            const maxElapsed = Math.max(duration * 1.5, duration + 5000);
+            const maxElapsed = Math.max(
+              durationMsTotal * 1.5,
+              durationMsTotal + 5000,
+            );
             if (typeof mapboxgl.setNow === "function") mapboxgl.setNow(now);
 
             const done = () => {
@@ -1638,14 +1968,7 @@
 
             const captureFrame = () => {
               const elapsed = now - startTime;
-              const animationPhase = timeToProgress(
-                elapsed,
-                legEndProgress,
-                legLengths,
-                maxTimePerStep,
-                speedup,
-                overrideDurs,
-              );
+              const animationPhase = pathProgressAt(elapsed);
               if (onProgress) onProgress(Math.min(1, animationPhase));
               if (onRender) onRender();
             };
@@ -1658,18 +1981,11 @@
                 now += 1000 / 60;
                 if (typeof mapboxgl.setNow === "function") mapboxgl.setNow(now);
                 const elapsed = now - startTime;
-                if (elapsed >= duration || elapsed >= maxElapsed) {
+                if (elapsed >= durationMsTotal || elapsed >= maxElapsed) {
                   done();
                   return;
                 }
-                const animationPhase = timeToProgress(
-                  elapsed,
-                  legEndProgress,
-                  legLengths,
-                  maxTimePerStep,
-                  speedup,
-                  overrideDurs,
-                );
+                const animationPhase = pathProgressAt(elapsed);
                 if (animationPhase >= 0.9999) {
                   done();
                   return;
@@ -1679,14 +1995,14 @@
                   line,
                   pathDistance,
                   Math.min(animationPhase, 1),
-                  opts,
+                  optsAtElapsed(elapsed),
                 );
                 map.triggerRepaint();
               },
             };
 
             map.on("render", captureFrame);
-            updateAnimationFrame(map, line, pathDistance, 0, opts);
+            updateAnimationFrame(map, line, pathDistance, 0, optsAtElapsed(0));
             map.addLayer(driverLayer);
           });
         }
@@ -1701,22 +2017,28 @@
             if (getStop()) {
               _previousCameraPosition = null;
               _previousCameraTarget = null;
-              updateAnimationFrame(map, line, pathDistance, 0, opts);
+              updateAnimationFrame(
+                map,
+                line,
+                pathDistance,
+                0,
+                optsAtElapsed(0),
+              );
               resolve();
               return;
             }
             if (getPause()) {
               if (pausedElapsed === null && startTime != null)
                 pausedElapsed = currentTime - startTime;
-              const phase = timeToProgress(
-                pausedElapsed ?? 0,
-                legEndProgress,
-                legLengths,
-                maxTimePerStep,
-                speedup,
-                overrideDurs,
+              const pauseElapsed = pausedElapsed ?? 0;
+              const phase = pathProgressAt(pauseElapsed);
+              updateAnimationFrame(
+                map,
+                line,
+                pathDistance,
+                phase,
+                optsAtElapsed(pauseElapsed),
               );
-              updateAnimationFrame(map, line, pathDistance, phase, opts);
               requestAnimationFrame(frame);
               return;
             }
@@ -1726,21 +2048,20 @@
             }
             if (!startTime) startTime = currentTime;
             const elapsed = currentTime - startTime;
-            const animationPhase = timeToProgress(
-              elapsed,
-              legEndProgress,
-              legLengths,
-              maxTimePerStep,
-              speedup,
-              overrideDurs,
-            );
+            const animationPhase = pathProgressAt(elapsed);
 
             if (animationPhase >= 1) {
               resolve();
               return;
             }
 
-            updateAnimationFrame(map, line, pathDistance, animationPhase, opts);
+            updateAnimationFrame(
+              map,
+              line,
+              pathDistance,
+              animationPhase,
+              optsAtElapsed(elapsed),
+            );
             requestAnimationFrame(frame);
           };
 
@@ -1822,7 +2143,15 @@
         durInput.className = "leg-duration-input";
         durInput.min = 0.1;
         durInput.step = 0.1;
-        durInput.value = document.getElementById("maxTimePerStep")?.value || 2;
+        const legCount = document.querySelectorAll(
+          "#waypoints .leg-control",
+        ).length;
+        const totalS = Number(document.getElementById("duration")?.value) || 2;
+        const perLeg = Math.max(
+          MIN_LEG_DURATION_S,
+          Math.round((totalS / Math.max(1, legCount)) * 10) / 10,
+        );
+        durInput.value = perLeg;
         wrap.appendChild(durLabel);
         wrap.appendChild(durInput);
         div.appendChild(label);
@@ -2089,7 +2418,6 @@
           const modes = getLegModes();
           const routeCoords = [];
           const legLengths = [];
-          let routeDistanceMeters = 0;
 
           for (let i = 0; i < waypoints.length - 1; i++) {
             const a = waypoints[i];
@@ -2099,9 +2427,6 @@
             let segment;
             if (mode === "fly") {
               segment = [a, b];
-              routeDistanceMeters += turf.length(turf.lineString([a, b]), {
-                units: "meters",
-              });
             } else {
               const profile = mode === "walk" ? "walking" : "driving";
               const coords = `${a[0]},${a[1]};${b[0]},${b[1]}`;
@@ -2112,12 +2437,8 @@
               if (!dirRes.routes?.length) {
                 segment = [a, b];
                 setLegMode(i, "fly");
-                routeDistanceMeters += turf.length(turf.lineString([a, b]), {
-                  units: "meters",
-                });
               } else {
                 segment = dirRes.routes[0].geometry.coordinates;
-                routeDistanceMeters += dirRes.routes[0].distance;
               }
             }
 
@@ -2156,50 +2477,15 @@
           updateAnimationUI();
           setPanelOpen(false);
 
-          const numStops = queries.length;
-          const maxTimePerStepMs =
-            (Number(document.getElementById("maxTimePerStep").value) || 2) *
-            1000;
-          const speedup =
-            Number(document.getElementById("speedup")?.value) || 4;
-          const legDurationsForDuration = getLegDurations(
-            legLengths,
-            maxTimePerStepMs,
-            speedup,
-          );
-          const durationMs = legDurationsForDuration
-            ? legDurationsForDuration.reduce((a, b) => a + b, 0)
-            : (numStops - 1) * maxTimePerStepMs;
-          document.getElementById("duration").value =
-            Math.round((durationMs / 1000) * 10) / 10;
-          if (document.getElementById("editDurationsManually")?.checked) {
-            const legInputs = document.querySelectorAll(
-              "#waypoints .leg-duration-input",
-            );
-            if (
-              legDurationsForDuration &&
-              legDurationsForDuration.length === legInputs.length
-            ) {
-              legInputs.forEach((el, i) => {
-                el.value =
-                  Math.round((legDurationsForDuration[i] / 1000) * 10) / 10;
-              });
-              document.getElementById("duration").value =
-                Math.round(
-                  (legDurationsForDuration.reduce((a, b) => a + b, 0) / 1000) *
-                    10,
-                ) / 10;
-              document.getElementById("maxTimePerStep").value =
-                Math.round((Math.max(...legDurationsForDuration) / 1000) * 10) /
-                10;
-            }
+          const manualDurationsOn = document.getElementById(
+            "editDurationsManually",
+          )?.checked;
+          if (!manualDurationsOn) {
+            applyDerivedMaxTimeFromDuration();
+          } else {
+            syncDurationFromLegInputs();
           }
-
-          const segmentLength = routeDistanceMeters / numStops;
-          const altitudeM = Math.round(
-            Math.max(50000, Math.min(2000000, segmentLength * 1.5)),
-          );
-          document.getElementById("startAltitude").value = altitudeM;
+          applyAutoAltitude();
 
           const bounds = new mapboxgl.LngLatBounds();
           route.forEach((c) => bounds.extend(c));
@@ -2245,13 +2531,12 @@
             maxTimePerStep:
               (Number(document.getElementById("maxTimePerStep").value) || 2) *
               1000,
-            speedup: Number(document.getElementById("speedup")?.value) || 4,
+            speedup: TRIPRENDER_SPEEDUP,
             manualLegDurations: manualDurations ?? undefined,
-            startBearing:
-              Number(document.getElementById("startBearing").value) || 0,
+            startBearing: TRIPRENDER_DEFAULT_BEARING,
             startAltitude:
               Number(document.getElementById("startAltitude").value) || 500000,
-            pitch: Number(document.getElementById("pitch").value) || 20,
+            pitch: TRIPRENDER_DEFAULT_PITCH,
             lineGradient: document.getElementById("lineGradient").checked,
             cameraFollow: document.getElementById("cameraFollow").checked,
             bearingChange: document.getElementById("bearingChange").checked,
@@ -2274,7 +2559,8 @@
       function triprenderFormatBytes(n) {
         if (n == null || !Number.isFinite(n)) return "";
         if (n < 1024) return n + " B";
-        if (n < 1024 * 1024) return (n / 1024).toFixed(n < 10240 ? 1 : 0) + " KB";
+        if (n < 1024 * 1024)
+          return (n / 1024).toFixed(n < 10240 ? 1 : 0) + " KB";
         return (n / (1024 * 1024)).toFixed(1) + " MB";
       }
 
@@ -2425,8 +2711,7 @@
           } else if (kind === "android-save") {
             titleEl.className += " success";
             titleEl.textContent = "Video saved";
-            lead.textContent =
-              "Your video was saved to the folder you chose.";
+            lead.textContent = "Your video was saved to the folder you chose.";
             var bnA = triprenderBasename(exportResult.path);
             if (bnA) meta.textContent = "Saved as: " + bnA;
           } else if (kind === "desktop-fallback") {
@@ -2445,7 +2730,12 @@
             lead.textContent = "Your route animation was exported.";
           }
 
-          if (!err && kind !== "cancelled" && bytes != null && Number.isFinite(bytes)) {
+          if (
+            !err &&
+            kind !== "cancelled" &&
+            bytes != null &&
+            Number.isFinite(bytes)
+          ) {
             var sz = triprenderFormatBytes(bytes);
             if (sz) {
               if (meta.textContent) {
@@ -2502,8 +2792,7 @@
        * export indefinitely and prevents status updates ("Loading encoder…", "Done…").
        */
       async function settleMapWithRepaint(map, paintCycles) {
-        var n =
-          paintCycles == null ? 28 : Math.max(4, Math.floor(paintCycles));
+        var n = paintCycles == null ? 28 : Math.max(4, Math.floor(paintCycles));
         var i;
         for (i = 0; i < n; i++) {
           map.triggerRepaint();
@@ -2523,12 +2812,32 @@
       var EXPORT_CROP_FORWARD_BIAS = 0.14;
 
       /** Short monotonic scrub along the route to warm tiles before encode (reduces white flashes). */
-      async function exportCameraPreRoll(map, line, pathDistance, opts) {
+      async function exportCameraPreRoll(
+        map,
+        line,
+        pathDistance,
+        opts,
+        legEndProgress,
+        baseAltitudeM,
+        legTargetAltitudes,
+      ) {
         var steps = 18;
         var s;
         for (s = 1; s <= steps; s++) {
           var phase = (s / steps) * 0.06;
-          updateAnimationFrame(map, line, pathDistance, phase, opts);
+          updateAnimationFrame(
+            map,
+            line,
+            pathDistance,
+            phase,
+            animationOptsForPathPhase(
+              opts,
+              phase,
+              baseAltitudeM,
+              legEndProgress,
+              legTargetAltitudes,
+            ),
+          );
           map.triggerRepaint();
           await new Promise(function (r) {
             requestAnimationFrame(r);
@@ -2536,7 +2845,19 @@
         }
         _previousCameraPosition = null;
         _previousCameraTarget = null;
-        updateAnimationFrame(map, line, pathDistance, 0, opts);
+        updateAnimationFrame(
+          map,
+          line,
+          pathDistance,
+          0,
+          animationOptsForPathPhase(
+            opts,
+            0,
+            baseAltitudeM,
+            legEndProgress,
+            legTargetAltitudes,
+          ),
+        );
         map.triggerRepaint();
         await new Promise(function (r) {
           requestAnimationFrame(r);
@@ -2578,9 +2899,8 @@
             exportWakeRaf = requestAnimationFrame(exportWakeTick);
           }
           exportWakeRaf = requestAnimationFrame(exportWakeTick);
-          const encoderModule = await import(
-            "https://unpkg.com/mp4-h264@1.0.7/build/mp4-encoder.js",
-          );
+          const encoderModule =
+            await import("https://unpkg.com/mp4-h264@1.0.7/build/mp4-encoder.js");
           const loadEncoder = encoderModule.default;
           /** Scalar WASM avoids empty mux output with mp4-h264 in some WebKit/Tauri builds. */
           const Encoder = await loadEncoder({ simd: false });
@@ -2606,14 +2926,11 @@
           const maxTimePerStepExport =
             (Number(document.getElementById("maxTimePerStep").value) || 2) *
             1000;
-          const speedupExport =
-            Number(document.getElementById("speedup")?.value) || 4;
-          const startBearingExport =
-            Number(document.getElementById("startBearing").value) || 0;
+          const speedupExport = TRIPRENDER_SPEEDUP;
+          const startBearingExport = TRIPRENDER_DEFAULT_BEARING;
           const startAltitudeExport =
             Number(document.getElementById("startAltitude").value) || 500000;
-          const pitchExport =
-            Number(document.getElementById("pitch").value) || 20;
+          const pitchExport = TRIPRENDER_DEFAULT_PITCH;
           const lineGradientExport =
             document.getElementById("lineGradient").checked;
           const cameraFollowExport =
@@ -2627,6 +2944,17 @@
           const warmPathDistance = warmLine
             ? turf.length(warmLine, { units: "kilometers" })
             : 0;
+          const rawLegEndWarm = currentRoute?.properties?.legEndProgress;
+          const legEndProgressWarm =
+            Array.isArray(rawLegEndWarm) && rawLegEndWarm.length > 0
+              ? rawLegEndWarm
+              : [1];
+          const legLengthsWarm = currentRoute?.properties?.legLengths ?? null;
+          const numLegsWarm = legEndProgressWarm.length;
+          const legTargetAltitudesWarm =
+            legLengthsWarm?.length === numLegsWarm && numLegsWarm > 0
+              ? computeLegTargetAltitudes(startAltitudeExport, legLengthsWarm)
+              : null;
           const warmOpts = {
             startBearing: startBearingExport,
             startAltitude: startAltitudeExport,
@@ -2642,10 +2970,24 @@
             warmLine,
             warmPathDistance,
             0,
-            warmOpts,
+            animationOptsForPathPhase(
+              warmOpts,
+              0,
+              startAltitudeExport,
+              legEndProgressWarm,
+              legTargetAltitudesWarm,
+            ),
           );
           map.triggerRepaint();
-          await exportCameraPreRoll(map, warmLine, warmPathDistance, warmOpts);
+          await exportCameraPreRoll(
+            map,
+            warmLine,
+            warmPathDistance,
+            warmOpts,
+            legEndProgressWarm,
+            startAltitudeExport,
+            legTargetAltitudesWarm,
+          );
           await settleMapWithRepaint(map, 14);
 
           if (exportWakeRaf) {
@@ -2656,8 +2998,8 @@
           const gl = map.painter.context.gl;
           let glFullW = gl.drawingBufferWidth;
           let glFullH = gl.drawingBufferHeight;
-          if (glFullW >= 2 && (glFullW & 1)) glFullW--;
-          if (glFullH >= 2 && (glFullH & 1)) glFullH--;
+          if (glFullW >= 2 && glFullW & 1) glFullW--;
+          if (glFullH >= 2 && glFullH & 1) glFullH--;
 
           if (!glFullW || !glFullH) {
             throw new Error(
@@ -2667,8 +3009,8 @@
 
           var targetW = width;
           var targetH = height;
-          if (targetW >= 2 && (targetW & 1)) targetW--;
-          if (targetH >= 2 && (targetH & 1)) targetH--;
+          if (targetW >= 2 && targetW & 1) targetW--;
+          if (targetH >= 2 && targetH & 1) targetH--;
           targetW = Math.min(targetW, glFullW);
           targetH = Math.min(targetH, glFullH);
           if (targetW < 2 || targetH < 2) {
@@ -2797,7 +3139,9 @@
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
             let didShare = false;
             const shareData = { files: [file], title: "Route animation" };
-            const canShare = typeof navigator.canShare === "function" && navigator.canShare(shareData);
+            const canShare =
+              typeof navigator.canShare === "function" &&
+              navigator.canShare(shareData);
             if (typeof navigator.share === "function" && canShare) {
               try {
                 var sharePromise = navigator.share(shareData);
@@ -2807,13 +3151,17 @@
                     await Promise.race([
                       sharePromise,
                       new Promise(function (_, reject) {
-                        setTimeout(function () { reject({ name: "Timeout" }); }, timeoutMs);
+                        setTimeout(function () {
+                          reject({ name: "Timeout" });
+                        }, timeoutMs);
                       }),
                     ]);
                   } catch (raceErr) {
                     if (raceErr.name === "Timeout") {
                       didShare = true;
-                      setExportStatus("If you chose Save to Photos or Save to Files, check that app for the video.");
+                      setExportStatus(
+                        "If you chose Save to Photos or Save to Files, check that app for the video.",
+                      );
                     }
                     throw raceErr;
                   }
@@ -2822,7 +3170,11 @@
                 }
                 if (!didShare) {
                   didShare = true;
-                  setExportStatus(isIOS ? "Check the Photos or Files app for the video." : "Saved via share sheet");
+                  setExportStatus(
+                    isIOS
+                      ? "Check the Photos or Files app for the video."
+                      : "Saved via share sheet",
+                  );
                 }
               } catch (shareErr) {
                 if (shareErr.name !== "AbortError" && !isIOS) {
@@ -2844,7 +3196,7 @@
               const blobUrl = URL.createObjectURL(downloadBlob);
               if (isIOS) {
                 setExportStatus(
-                  "Use \"Share again\" and choose Save to Photos or Save to Files.",
+                  'Use "Share again" and choose Save to Photos or Save to Files.',
                 );
                 const wrap = document.createElement("div");
                 wrap.id = "iosSaveOverlay";
@@ -2858,7 +3210,7 @@
                 msg.style.maxWidth = "320px";
                 if (typeof navigator.share === "function") {
                   msg.textContent =
-                    "To save to Photos: tap \"Share again\" and choose Save to Photos or Save to Files. You can also long-press the video below and choose Save to Video / Add to Photos.";
+                    'To save to Photos: tap "Share again" and choose Save to Photos or Save to Files. You can also long-press the video below and choose Save to Video / Add to Photos.';
                 } else {
                   msg.textContent =
                     "Saving to Photos only works in Safari. Open this page in Safari (and use HTTPS), then export again and use the share sheet.";
@@ -2879,9 +3231,13 @@
                 shareAgainBtn.style.padding = "0.75rem 1.5rem";
                 shareAgainBtn.style.fontSize = "1.1rem";
                 shareAgainBtn.onclick = function () {
-                  const shareFile = new File([downloadBlob], "route-animation.mp4", {
-                    type: "video/mp4",
-                  });
+                  const shareFile = new File(
+                    [downloadBlob],
+                    "route-animation.mp4",
+                    {
+                      type: "video/mp4",
+                    },
+                  );
                   var resolved = false;
                   function closeOverlay(successMsg) {
                     if (resolved) return;
@@ -2891,21 +3247,29 @@
                     if (successMsg) setExportStatus(successMsg);
                   }
                   var t = setTimeout(function () {
-                    closeOverlay("If you chose Save to Photos or Save to Files, check that app for the video.");
+                    closeOverlay(
+                      "If you chose Save to Photos or Save to Files, check that app for the video.",
+                    );
                   }, 3000);
-                  navigator.share({ files: [shareFile], title: "Route animation" }).then(
-                    function () {
-                      clearTimeout(t);
-                      closeOverlay("Check the Photos or Files app for the video.");
-                    },
-                    function (err) {
-                      clearTimeout(t);
-                      if (err.name !== "AbortError") {
-                        setExportStatus("Share failed: " + (err.message || err.name));
-                      }
-                      closeOverlay();
-                    }
-                  );
+                  navigator
+                    .share({ files: [shareFile], title: "Route animation" })
+                    .then(
+                      function () {
+                        clearTimeout(t);
+                        closeOverlay(
+                          "Check the Photos or Files app for the video.",
+                        );
+                      },
+                      function (err) {
+                        clearTimeout(t);
+                        if (err.name !== "AbortError") {
+                          setExportStatus(
+                            "Share failed: " + (err.message || err.name),
+                          );
+                        }
+                        closeOverlay();
+                      },
+                    );
                 };
                 const closeBtn = document.createElement("button");
                 closeBtn.type = "button";
