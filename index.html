@@ -782,7 +782,7 @@
                   <input
                     type="number"
                     class="leg-duration-input"
-                    min="0.1"
+                    min="2"
                     step="0.1"
                   />
                 </span>
@@ -858,7 +858,7 @@
                   type="number"
                   id="duration"
                   value="2"
-                  min="0.1"
+                  min="2"
                   step="0.1"
                 />
               </div>
@@ -866,7 +866,7 @@
                 type="number"
                 id="maxTimePerStep"
                 value="2"
-                min="0.1"
+                min="2"
                 step="0.1"
                 hidden
                 aria-hidden="true"
@@ -1136,6 +1136,45 @@
         return Math.hypot(q.x - p.x, q.y - p.y);
       }
 
+      /** Sum of Mercator segment lengths; matches Mapbox `line-progress` along the polyline. */
+      function mercatorPolylineLengthMeters(coords) {
+        if (!coords || coords.length < 2) return 0;
+        let total = 0;
+        for (let i = 1; i < coords.length; i++) {
+          total += mercatorDistanceMeters(coords[i - 1], coords[i]);
+        }
+        return total;
+      }
+
+      /** Mean Earth radius (m); WGS84 authalic sphere ~6371007 m. */
+      const EARTH_RADIUS_M = 6371008.8;
+
+      /**
+       * Extrapolate ground arc length for flat FOV math: add sagitta of great-circle arc
+       * plus chord-vs-arc term so long legs need higher camera altitude than a planar model.
+       */
+      function effectiveLegLengthMetersForAltitude(arcLengthM) {
+        const s = Math.max(0, Number(arcLengthM) || 0);
+        if (s <= 0) return 0;
+        const R = EARTH_RADIUS_M;
+        const maxArc = Math.PI * R;
+        const sc = Math.min(s, maxArc);
+        const theta = sc / R;
+        const bulge = R * (1 - Math.cos(theta / 2));
+        const chordArc = sc - 2 * R * Math.sin(theta / 2);
+        return sc + 4 * bulge + Math.max(0, chordArc);
+      }
+
+      /** Per leg: max(geodesic km, Mercator km) for altitude-only calculations. */
+      function mergeLegKmForAltitude(legLengthsKm, legMercatorLengthsKm) {
+        if (!legLengthsKm?.length) return [];
+        return legLengthsKm.map((g, i) => {
+          const m = legMercatorLengthsKm?.[i];
+          const mk = Number.isFinite(m) && m > 0 ? m : g;
+          return Math.max(g, mk);
+        });
+      }
+
       // Progress 0..1 along route using Mercator segment lengths (matches Mapbox line-progress).
       function pointAlongRouteByProgress(coords, progress) {
         if (!coords.length) return coords[0];
@@ -1319,9 +1358,9 @@
         panel.classList.toggle("expanded");
       }
 
-      const MIN_LEG_DURATION_S = 0.1;
+      const MIN_LEG_DURATION_S = 2;
       const MAX_LEG_DURATION_S = 60;
-      const MIN_LEG_DURATION_MS = 100;
+      const MIN_LEG_DURATION_MS = 2000;
       const MAX_LEG_DURATION_MS = 60000;
 
       /** Fixed getLegDurations spread; speedup control removed from UI. */
@@ -1367,41 +1406,115 @@
         if (el) el.value = Math.round((maxMs / 1000) * 100) / 100;
       }
 
-      /** Nominal vertical FOV (deg) for visibility estimate; tune with scene. */
-      const MAP_NOMINAL_VERTICAL_FOV_DEG = 50;
+      /**
+       * Mapbox GL JS default vertical FOV (degrees) — matches `2 * atan(0.75)` rad in
+       * transform (~0.643 rad ≈ 36.87°); mapbox-gl-js v3.x. Fallback when `transform._fov` unavailable.
+       */
+      const MAPBOX_DEFAULT_VERTICAL_FOV_DEG =
+        (2 * Math.atan(0.75) * 180) / Math.PI;
+
+      /** Prefer runtime FOV from the map transform (private API; may change across Mapbox versions). */
+      function getMapVerticalFovDegrees() {
+        try {
+          const fovRad = map?.transform?._fov;
+          if (
+            fovRad != null &&
+            Number.isFinite(fovRad) &&
+            fovRad > 0.05 &&
+            fovRad < 2.5
+          ) {
+            return (fovRad * 180) / Math.PI;
+          }
+        } catch (_) {}
+        return MAPBOX_DEFAULT_VERTICAL_FOV_DEG;
+      }
+
+      /** Upper clamp (m); 2 Mm was too low for long fly legs — allow orbit-scale framing. */
+      const AUTO_ALTITUDE_MAX_M = 15_000_000;
 
       /**
-       * Altitude so roughly half of the longest leg is visible (approximate perspective).
-       * Uses same pitch convention as computeCameraPosition: pitchRad = (90 - pitch)°.
+       * Scale raw auto altitude: short legs retain 60% (40% dial-back), long legs 80% (20% dial-back),
+       * interpolated by effective arc length vs half a great circle.
        */
-      function computeAutoAltitudeMeters(legLengthsKm, pitchDeg) {
-        const longestKm = Math.max(...(legLengthsKm || [0]), 1e-9);
-        const L = longestKm * 1000;
-        const halfLegVisible = 0.5 * L;
+      function autoAltitudeDialBackFactor(effectiveLegM) {
+        const L = Math.max(0, Number(effectiveLegM) || 0);
+        const t = Math.max(0, Math.min(1, L / (Math.PI * EARTH_RADIUS_M)));
+        return lerp(0.6, 0.8, t);
+      }
+
+      /**
+       * Altitude so ~200% of the longest leg length fits the vertical FOV at the given pitch (see computeCameraPosition: pitchRad = (90 - pitch)°).
+       * @param {number} [verticalFovDeg] — vertical field of view in degrees; defaults to Mapbox default.
+       * @param {number[]|null} [legMercatorLengthsKm] — optional per-leg Mercator km; max with geodesic before spherical extrapolation.
+       */
+      function computeAutoAltitudeMeters(
+        legLengthsKm,
+        pitchDeg,
+        verticalFovDeg,
+        legMercatorLengthsKm,
+      ) {
+        const merged = mergeLegKmForAltitude(
+          legLengthsKm,
+          legMercatorLengthsKm,
+        );
+        const pool = merged.length ? merged : legLengthsKm || [0];
+        const longestKm = Math.max(...pool, 1e-9);
+        const L = effectiveLegLengthMetersForAltitude(longestKm * 1000);
+        const arcFrac = L / (Math.PI * EARTH_RADIUS_M);
+        const longLegFramingBoost = 1 + Math.min(1.5, arcFrac * 2);
+        const longestLegVisibleM = 0.25 * L * longLegFramingBoost;
+        const dialBack = autoAltitudeDialBackFactor(L);
         const pitch = Math.max(0, Math.min(85, Number(pitchDeg) || 20));
         const pitchRad = ((90 - pitch) * Math.PI) / 180;
-        const fovRad = (MAP_NOMINAL_VERTICAL_FOV_DEG * Math.PI) / 180;
-        if (pitchRad <= 0.01 || fovRad <= 0)
-          return Math.round(
-            Math.max(50000, Math.min(2000000, longestKm * 1.5e6)),
-          );
+        const fovDeg =
+          verticalFovDeg != null &&
+          Number.isFinite(verticalFovDeg) &&
+          verticalFovDeg > 0 &&
+          verticalFovDeg < 175
+            ? verticalFovDeg
+            : MAPBOX_DEFAULT_VERTICAL_FOV_DEG;
+        const fovRad = (fovDeg * Math.PI) / 180;
+        if (pitchRad <= 0.01 || fovRad <= 0) {
+          const effKm =
+            effectiveLegLengthMetersForAltitude(longestKm * 1000) / 1000;
+          const h0 = effKm * 1.5e6 * dialBack;
+          return Math.round(Math.max(50000, Math.min(AUTO_ALTITUDE_MAX_M, h0)));
+        }
         const tanHalfFov = Math.tan(fovRad / 2);
         const sinPitch = Math.sin(pitchRad);
         const denom = 2 * tanHalfFov * sinPitch;
         if (denom <= 1e-9) return 500000;
-        const h = halfLegVisible / denom;
-        return Math.round(Math.max(50000, Math.min(2000000, h)));
+        const h = (longestLegVisibleM / denom) * dialBack;
+        return Math.round(Math.max(50000, Math.min(AUTO_ALTITUDE_MAX_M, h)));
       }
 
       function applyAutoAltitude() {
         const legLengths = currentRoute?.properties?.legLengths;
         if (!legLengths?.length) return;
+        const coords = currentRoute?.geometry?.coordinates;
+        let midLat = 0;
+        if (coords?.length) {
+          const c = coords[Math.floor(coords.length / 2)];
+          if (c && c.length >= 2) midLat = c[1];
+        }
+        const pitch = pitchForLatitude(TRIPRENDER_DEFAULT_PITCH, midLat);
         const alt = computeAutoAltitudeMeters(
           legLengths,
-          TRIPRENDER_DEFAULT_PITCH,
+          pitch,
+          getMapVerticalFovDegrees(),
+          currentRoute?.properties?.legMercatorLengthsKm,
         );
         const el = document.getElementById("startAltitude");
         if (el) el.value = alt;
+      }
+
+      function updateTotalDurationMinAttribute() {
+        const n = document.querySelectorAll(
+          "#waypoints .leg-duration-input",
+        ).length;
+        const el = document.getElementById("duration");
+        if (!el || n < 1) return;
+        el.min = String(n * MIN_LEG_DURATION_S);
       }
 
       function syncDurationFromLegInputs() {
@@ -1419,6 +1532,7 @@
         const durationEl = document.getElementById("duration");
         const maxTimeEl = document.getElementById("maxTimePerStep");
         if (durationEl) durationEl.value = Math.round(sum * 10) / 10;
+        updateTotalDurationMinAttribute();
         if (maxTimeEl)
           maxTimeEl.value = Math.round(Math.max(...values) * 10) / 10;
       }
@@ -1468,6 +1582,7 @@
         cb.addEventListener("change", () => {
           document.body.classList.toggle("manual-leg-durations", cb.checked);
           if (cb.checked) syncManualLegDurationsFromRoute();
+          else updateTotalDurationMinAttribute();
           onAnimationParamChange();
         });
         document.getElementById("waypoints").addEventListener("input", (e) => {
@@ -1480,6 +1595,7 @@
           syncDurationFromLegInputs();
           onAnimationParamChange();
         });
+        updateTotalDurationMinAttribute();
       })();
 
       (function initAnimationTimingListeners() {
@@ -1527,12 +1643,12 @@
       }
 
       /** Shortest leg uses this fraction of base altitude; longest leg uses full base altitude. */
-      const SHORT_LEG_ALTITUDE_RATIO = 0.2;
+      const SHORT_LEG_ALTITUDE_RATIO = 0.1;
       /** Used only by animationOptsForPathPhase (export pre-roll / warm frames). */
       const LEG_ALTITUDE_BLEND_PORTION = 0.3;
 
-      /** Hold path progress while altitude catches up: 0.01s (10ms) per 10km altitude delta. */
-      const ALTITUDE_BLEND_MS_PER_10KM = 10;
+      /** Hold path progress while altitude catches up; lower = less time holding vs moving (~50% route when blends were ~3× move). */
+      const ALTITUDE_BLEND_MS_PER_10KM = 10 / 3;
 
       function altitudeBlendDurationMs(fromAltM, toAltM) {
         const d = Math.abs(Number(toAltM) - Number(fromAltM));
@@ -1594,19 +1710,30 @@
         };
       }
 
-      function computeLegTargetAltitudes(baseAltitudeM, legLengthsKm) {
+      function computeLegTargetAltitudes(
+        baseAltitudeM,
+        legLengthsKm,
+        legMercatorLengthsKm,
+      ) {
         if (!legLengthsKm?.length) return [];
-        const minLen = Math.min(...legLengthsKm);
-        const maxLen = Math.max(...legLengthsKm);
+        const merged = mergeLegKmForAltitude(
+          legLengthsKm,
+          legMercatorLengthsKm,
+        );
+        const effKm = merged.map(
+          (km) => effectiveLegLengthMetersForAltitude(km * 1000) / 1000,
+        );
+        const minLen = Math.min(...effKm);
+        const maxLen = Math.max(...effKm);
         const minAlt = baseAltitudeM * SHORT_LEG_ALTITUDE_RATIO;
         if (
           maxLen <= minLen ||
           !Number.isFinite(minLen) ||
           !Number.isFinite(maxLen)
         )
-          return legLengthsKm.map(() => baseAltitudeM);
+          return effKm.map(() => baseAltitudeM);
         const span = maxLen - minLen;
-        return legLengthsKm.map((len) => {
+        return effKm.map((len) => {
           const t = (len - minLen) / span;
           return lerp(minAlt, baseAltitudeM, t);
         });
@@ -1852,6 +1979,8 @@
         const legEndProgress =
           Array.isArray(rawLegEnd) && rawLegEnd.length > 0 ? rawLegEnd : [1];
         const legLengths = path.properties?.legLengths ?? null;
+        const legMercatorLengthsKm =
+          path.properties?.legMercatorLengthsKm ?? null;
         const numLegs = legEndProgress.length;
         const useManual =
           manualLegDurations &&
@@ -1876,7 +2005,11 @@
         };
         const legTargetAltitudes =
           legLengths?.length === numLegs && numLegs > 0
-            ? computeLegTargetAltitudes(startAltitude, legLengths)
+            ? computeLegTargetAltitudes(
+                startAltitude,
+                legLengths,
+                legMercatorLengthsKm,
+              )
             : null;
 
         const useAltitudeTimeline = !!(
@@ -2115,6 +2248,11 @@
         row.remove();
         updateAddStopState();
         setAnimationDirty();
+        if (document.getElementById("editDurationsManually")?.checked) {
+          syncDurationFromLegInputs();
+        } else {
+          updateTotalDurationMinAttribute();
+        }
         document
           .getElementById("waypoints")
           .dispatchEvent(new CustomEvent("waypoint-row-removed"));
@@ -2141,7 +2279,7 @@
         const durInput = document.createElement("input");
         durInput.type = "number";
         durInput.className = "leg-duration-input";
-        durInput.min = 0.1;
+        durInput.min = MIN_LEG_DURATION_S;
         durInput.step = 0.1;
         const legCount = document.querySelectorAll(
           "#waypoints .leg-control",
@@ -2186,6 +2324,22 @@
         container.appendChild(createWaypointRow("Stop"));
         updateAddStopState();
         setAnimationDirty();
+        const manual = document.getElementById(
+          "editDurationsManually",
+        )?.checked;
+        const numLegs = document.querySelectorAll(
+          "#waypoints .leg-duration-input",
+        ).length;
+        const minTotal = numLegs * MIN_LEG_DURATION_S;
+        const durEl = document.getElementById("duration");
+        if (manual) {
+          syncDurationFromLegInputs();
+        } else if (durEl) {
+          const v = Number(durEl.value);
+          const cur = Number.isFinite(v) ? v : minTotal;
+          if (cur < minTotal) durEl.value = minTotal;
+          updateTotalDurationMinAttribute();
+        }
         container.querySelector(".waypoint-row:last-of-type input").focus();
       }
 
@@ -2418,6 +2572,7 @@
           const modes = getLegModes();
           const routeCoords = [];
           const legLengths = [];
+          const legMercatorLengthsM = [];
 
           for (let i = 0; i < waypoints.length - 1; i++) {
             const a = waypoints[i];
@@ -2445,6 +2600,7 @@
             legLengths.push(
               turf.length(turf.lineString(segment), { units: "kilometers" }),
             );
+            legMercatorLengthsM.push(mercatorPolylineLengthMeters(segment));
             if (routeCoords.length > 0) {
               routeCoords.pop();
             }
@@ -2452,14 +2608,17 @@
           }
 
           const route = routeCoords;
-          const totalPathKm = legLengths.reduce((a, b) => a + b, 0);
+          const totalMercatorM = legMercatorLengthsM.reduce((a, b) => a + b, 0);
+          const legMercatorLengthsKm = legMercatorLengthsM.map((m) => m / 1000);
+          // Cumulative Mercator length / total (matches Mapbox `line-progress`); legLengths stay in km for timing UI.
           const legEndProgress =
-            totalPathKm <= 0
+            totalMercatorM <= 0
               ? [1]
-              : legLengths.map(
+              : legMercatorLengthsM.map(
                   (_, i) =>
-                    legLengths.slice(0, i + 1).reduce((a, b) => a + b, 0) /
-                    totalPathKm,
+                    legMercatorLengthsM
+                      .slice(0, i + 1)
+                      .reduce((a, b) => a + b, 0) / totalMercatorM,
                 );
 
           removeRouteLayerOnly();
@@ -2471,7 +2630,7 @@
           currentRoute = {
             type: "Feature",
             geometry: { type: "LineString", coordinates: route },
-            properties: { legEndProgress, legLengths },
+            properties: { legEndProgress, legLengths, legMercatorLengthsKm },
           };
           animationDirty = false;
           updateAnimationUI();
@@ -2950,10 +3109,16 @@
               ? rawLegEndWarm
               : [1];
           const legLengthsWarm = currentRoute?.properties?.legLengths ?? null;
+          const legMercatorLengthsKmWarm =
+            currentRoute?.properties?.legMercatorLengthsKm ?? null;
           const numLegsWarm = legEndProgressWarm.length;
           const legTargetAltitudesWarm =
             legLengthsWarm?.length === numLegsWarm && numLegsWarm > 0
-              ? computeLegTargetAltitudes(startAltitudeExport, legLengthsWarm)
+              ? computeLegTargetAltitudes(
+                  startAltitudeExport,
+                  legLengthsWarm,
+                  legMercatorLengthsKmWarm,
+                )
               : null;
           const warmOpts = {
             startBearing: startBearingExport,
