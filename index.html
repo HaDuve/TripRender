@@ -3124,6 +3124,9 @@
         const exportOverlay = document.getElementById("exportOverlay");
         if (exportOverlay) exportOverlay.classList.add("visible");
         setExportStatus("Loading encoder...");
+        try {
+          await window.triprenderKeepAwakeStart?.();
+        } catch (_) {}
 
         const exportBtn = document.getElementById("exportBtn");
         const statusEl = document.getElementById("exportStatus");
@@ -3552,6 +3555,9 @@
           exportResult.error = (err && err.message) || String(err);
           setExportStatus("Error: " + exportResult.error);
         } finally {
+          try {
+            await window.triprenderKeepAwakeStop?.();
+          } catch (_) {}
           if (exportWakeRaf) {
             cancelAnimationFrame(exportWakeRaf);
             exportWakeRaf = 0;

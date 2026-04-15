@@ -20,6 +20,8 @@ pub fn run() {
     .plugin(tauri_plugin_fs::init())
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_os::init())
+    .plugin(tauri_plugin_keepawake::init())
+    .plugin(tauri_plugin_keep_screen_on::init())
     .invoke_handler(tauri::generate_handler![save_video_to_photos_library])
     .setup(|app| {
       if cfg!(debug_assertions) {
