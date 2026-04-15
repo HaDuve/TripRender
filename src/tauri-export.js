@@ -7,8 +7,6 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { join, appCacheDir } from "@tauri-apps/api/path";
 import { platform } from "@tauri-apps/plugin-os";
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { keepScreenOn } from "tauri-plugin-keep-screen-on-api";
-import { start as keepAwakeStart, stop as keepAwakeStop } from "tauri-plugin-keepawake-api";
 
 const CACHE_REL = "route-animation.mp4";
 /** Must match `identifier` in `src-tauri/tauri.conf.json` — segment under $CACHE for app cache dir. */
@@ -54,37 +52,7 @@ export function triprenderIsTauri() {
   return isTauri();
 }
 
-export async function triprenderKeepAwakeStart() {
-  if (!isTauri()) return;
-  const os = platform();
-  try {
-    if (os === "ios" || os === "android") {
-      await keepScreenOn(true);
-      return;
-    }
-    await keepAwakeStart({ display: true, idle: true, sleep: true });
-  } catch {
-    // Best-effort: if keep-awake fails, export should still proceed.
-  }
-}
-
-export async function triprenderKeepAwakeStop() {
-  if (!isTauri()) return;
-  const os = platform();
-  try {
-    if (os === "ios" || os === "android") {
-      await keepScreenOn(false);
-      return;
-    }
-    await keepAwakeStop();
-  } catch {
-    // Best-effort.
-  }
-}
-
 if (typeof window !== "undefined") {
   window.saveTripRenderExport = saveTripRenderExport;
   window.triprenderIsTauri = triprenderIsTauri;
-  window.triprenderKeepAwakeStart = triprenderKeepAwakeStart;
-  window.triprenderKeepAwakeStop = triprenderKeepAwakeStop;
 }
