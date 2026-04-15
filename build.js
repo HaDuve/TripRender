@@ -18,6 +18,15 @@ fs.mkdirSync(path.dirname(out), { recursive: true });
 fs.writeFileSync(out, html);
 console.log('Built dist/index.html');
 
+// Ensure static assets referenced by index.html are shipped.
+const assetsSrcDir = path.join(__dirname, 'assets');
+const assetsOutDir = path.join(__dirname, 'dist', 'assets');
+if (fs.existsSync(assetsSrcDir)) {
+  fs.mkdirSync(path.dirname(assetsOutDir), { recursive: true });
+  fs.cpSync(assetsSrcDir, assetsOutDir, { recursive: true });
+  console.log('Copied assets/ -> dist/assets/');
+}
+
 try {
   esbuild.buildSync({
     entryPoints: [path.join(__dirname, 'src', 'tauri-export.js')],
