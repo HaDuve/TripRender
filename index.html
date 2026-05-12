@@ -786,7 +786,7 @@
                   <input
                     type="number"
                     class="leg-duration-input"
-                    min="2"
+                    min="3"
                     step="0.1"
                   />
                 </span>
@@ -861,16 +861,26 @@
                 <input
                   type="number"
                   id="duration"
+                  value="3"
+                  min="3"
+                  step="0.1"
+                />
+              </div>
+              <div class="control-row">
+                <label for="introOutroDuration">Intro/Outro Duration (s)</label>
+                <input
+                  type="number"
+                  id="introOutroDuration"
                   value="2"
-                  min="2"
+                  min="0.1"
                   step="0.1"
                 />
               </div>
               <input
                 type="number"
                 id="maxTimePerStep"
-                value="2"
-                min="2"
+                value="3"
+                min="3"
                 step="0.1"
                 hidden
                 aria-hidden="true"
@@ -1362,18 +1372,10 @@
         panel.classList.toggle("expanded");
       }
 
-      const MIN_LEG_DURATION_S = 2;
+      const MIN_LEG_DURATION_S = 3;
       const MAX_LEG_DURATION_S = 60;
-      const MIN_LEG_DURATION_MS = 2000;
+      const MIN_LEG_DURATION_MS = 3000;
       const MAX_LEG_DURATION_MS = 60000;
-
-      /**
-       * After the route finishes, zoom altitude toward shortest-leg framing, then hold.
-       * Visible only when camera follow is on (same as the rest of `updateAnimationFrame`).
-       */
-      const FINAL_DEST_HOLD_MS = 1000;
-      const FINAL_ZOOM_MS_MIN = 400;
-      const FINAL_ZOOM_MS_MAX = 8000;
 
       /** Fixed getLegDurations spread; speedup control removed from UI. */
       const TRIPRENDER_SPEEDUP = 1;
@@ -1391,13 +1393,14 @@
         speedup,
       ) {
         const n = legLengthsKm?.length ?? 0;
-        if (!n || !Number.isFinite(durationMs) || durationMs <= 0) return 2000;
+        if (!n || !Number.isFinite(durationMs) || durationMs <= 0)
+          return MIN_LEG_DURATION_MS;
         const Lmax = Math.max(...legLengthsKm, 1e-12);
         const S = legLengthsKm.reduce((a, b) => a + b, 0);
         const sp = Math.max(1, Number(speedup) || 1);
         const r = 1 / sp;
         const denom = n * r + ((1 - r) * S) / Lmax;
-        if (!Number.isFinite(denom) || denom <= 0) return 2000;
+        if (!Number.isFinite(denom) || denom <= 0) return MIN_LEG_DURATION_MS;
         let maxMs = durationMs / denom;
         const minMs = MIN_LEG_DURATION_MS * sp;
         maxMs = Math.max(minMs, Math.min(MAX_LEG_DURATION_MS, maxMs));
@@ -1408,7 +1411,8 @@
         const legLengths = currentRoute?.properties?.legLengths;
         if (!legLengths?.length) return;
         const durationMs =
-          (Number(document.getElementById("duration")?.value) || 2) * 1000;
+          (Number(document.getElementById("duration")?.value) ||
+            MIN_LEG_DURATION_S) * 1000;
         const maxMs = maxTimePerStepMsFromTotalDuration(
           durationMs,
           legLengths,
@@ -1566,7 +1570,8 @@
         if (currentRoute?.properties?.legLengths) {
           const legLengths = currentRoute.properties.legLengths;
           const durationMs =
-            (Number(document.getElementById("duration")?.value) || 2) * 1000;
+            (Number(document.getElementById("duration")?.value) ||
+              MIN_LEG_DURATION_S) * 1000;
           const maxTimePerStepMs = maxTimePerStepMsFromTotalDuration(
             durationMs,
             legLengths,
@@ -1584,7 +1589,8 @@
           }
         } else {
           const totalS =
-            Number(document.getElementById("duration")?.value) || 2;
+            Number(document.getElementById("duration")?.value) ||
+            MIN_LEG_DURATION_S;
           const perLeg = Math.max(
             MIN_LEG_DURATION_S,
             Math.round((totalS / numLegs) * 10) / 10,
@@ -1654,7 +1660,7 @@
       function getLegDurations(legLengths, maxTimePerStep, speedup) {
         if (!legLengths?.length) return null;
         const safeSpeedup = Math.max(1, Number(speedup) || 1);
-        const safeMax = Math.max(0, Number(maxTimePerStep) || 2000);
+        const safeMax = Math.max(0, Number(maxTimePerStep) || MIN_LEG_DURATION_MS);
         const maxLegLength = Math.max(...legLengths, 0);
         if (maxLegLength === 0) return legLengths.map(() => safeMax);
         const minDur = safeMax / safeSpeedup;
@@ -1675,6 +1681,44 @@
         if (!Number.isFinite(d) || d <= 0) return 0;
         return (d / 10000) * ALTITUDE_BLEND_MS_PER_10KM;
       }
+
+      const BOOKEND_ALT_RATIO = 1.35;
+      const BOOKEND_ALT_MIN_DELTA_M = 150000;
+      const ROUTE_END_HOLD_MS = 600;
+      const INTRO_OUTRO_DURATION_DEFAULT_MS = 2000;
+      const INTRO_OUTRO_DURATION_MS_MIN = 100;
+      /** Upper cap for #introOutroDuration (seconds); `max` attribute is synced on load. */
+      const INTRO_OUTRO_DURATION_S_MAX = 60;
+      const INTRO_OUTRO_DURATION_MS_MAX = INTRO_OUTRO_DURATION_S_MAX * 1000;
+
+      function introApexAltitudeMeters(startAltM) {
+        const s = Math.max(0, Number(startAltM) || 0);
+        return Math.min(
+          AUTO_ALTITUDE_MAX_M,
+          Math.max(s * BOOKEND_ALT_RATIO, s + BOOKEND_ALT_MIN_DELTA_M),
+        );
+      }
+
+      function clampIntroOutroDurationMs(ms) {
+        const v = Number(ms);
+        const x = Number.isFinite(v) && v > 0 ? v : INTRO_OUTRO_DURATION_DEFAULT_MS;
+        return Math.min(
+          INTRO_OUTRO_DURATION_MS_MAX,
+          Math.max(INTRO_OUTRO_DURATION_MS_MIN, x),
+        );
+      }
+
+      function getIntroOutroDurationMsFromInput() {
+        return (
+          (Number(document.getElementById("introOutroDuration")?.value) || 2) *
+          1000
+        );
+      }
+
+      (function syncIntroOutroDurationInputMax() {
+        const el = document.getElementById("introOutroDuration");
+        if (el) el.setAttribute("max", String(INTRO_OUTRO_DURATION_S_MAX));
+      })();
 
       /**
        * Per leg: (1) blend altitude with path fixed at leg start, (2) move along leg at target altitude.
@@ -1831,7 +1875,7 @@
       ) {
         const numLegs = legEndProgress.length;
         if (numLegs === 0) return { pathProgress: 1, legIndex: 0, tInLeg: 1 };
-        const safeMax = Math.max(0, Number(maxTimePerStep) || 2000);
+        const safeMax = Math.max(0, Number(maxTimePerStep) || MIN_LEG_DURATION_MS);
         const legDurations =
           overrideLegDurations &&
           overrideLegDurations.length === numLegs &&
@@ -1980,6 +2024,7 @@
         manualLegDurations,
         startBearing,
         startAltitude,
+        introOutroDurationMs = INTRO_OUTRO_DURATION_DEFAULT_MS,
         pitch,
         lineGradient,
         cameraFollow,
@@ -2049,31 +2094,11 @@
           ? altitudeHoldMs + moveDurationMs
           : moveDurationMs;
 
-        let endRouteAlt = null;
-        let shortestLegAlt = null;
-        let finalZoomMs = 0;
-        let finalHoldMs = 0;
-        if (legTargetAltitudes?.length) {
-          endRouteAlt = legTargetAltitudes[legTargetAltitudes.length - 1];
-          shortestLegAlt = Math.min(...legTargetAltitudes);
-          const altDelta = Math.abs(endRouteAlt - shortestLegAlt);
-          if (altDelta < 1) {
-            finalZoomMs = 0;
-          } else {
-            const rawZoom = altitudeBlendDurationMs(endRouteAlt, shortestLegAlt);
-            finalZoomMs = Math.min(
-              FINAL_ZOOM_MS_MAX,
-              Math.max(FINAL_ZOOM_MS_MIN, rawZoom || 0),
-            );
-          }
-          finalHoldMs = FINAL_DEST_HOLD_MS;
-        }
-        const fullDurationMs = durationMsTotal + finalZoomMs + finalHoldMs;
-
-        function pathProgressAt(elapsedMs) {
+        function innerPathProgressAt(innerMs) {
+          const t = Math.max(0, Math.min(durationMsTotal, innerMs));
           if (useAltitudeTimeline) {
             return animationStateAtElapsed(
-              elapsedMs,
+              t,
               legEndProgress,
               legDurations,
               startAltitude,
@@ -2081,7 +2106,7 @@
             ).pathProgress;
           }
           return timeToProgress(
-            elapsedMs,
+            t,
             legEndProgress,
             legLengths,
             maxTimePerStep,
@@ -2090,55 +2115,104 @@
           );
         }
 
-        function optsAtElapsed(elapsedMs) {
+        function innerOptsAtElapsed(innerMs) {
+          const t = Math.max(0, Math.min(durationMsTotal, innerMs));
           if (!legTargetAltitudes?.length) return opts;
-          let base;
           if (useAltitudeTimeline) {
             const st = animationStateAtElapsed(
-              elapsedMs,
+              t,
               legEndProgress,
               legDurations,
               startAltitude,
               legTargetAltitudes,
             );
-            base = { ...opts, currentAltitude: st.currentAltitude };
-          } else {
-            const ctx = elapsedToLegContext(
-              elapsedMs,
-              legEndProgress,
-              legLengths,
-              maxTimePerStep,
-              speedup,
-              overrideDurs,
-            );
-            base = {
-              ...opts,
-              currentAltitude: currentAltitudeForLegState(
-                startAltitude,
-                legTargetAltitudes,
-                ctx.legIndex,
-                ctx.tInLeg,
-              ),
-            };
+            return { ...opts, currentAltitude: st.currentAltitude };
           }
-          if (
-            finalHoldMs <= 0 ||
-            endRouteAlt == null ||
-            shortestLegAlt == null
-          ) {
-            return base;
+          const ctx = elapsedToLegContext(
+            t,
+            legEndProgress,
+            legLengths,
+            maxTimePerStep,
+            speedup,
+            overrideDurs,
+          );
+          return {
+            ...opts,
+            currentAltitude: currentAltitudeForLegState(
+              startAltitude,
+              legTargetAltitudes,
+              ctx.legIndex,
+              ctx.tInLeg,
+            ),
+          };
+        }
+
+        const endOpt = innerOptsAtElapsed(durationMsTotal);
+        const endAlt =
+          endOpt.currentAltitude != null &&
+          Number.isFinite(endOpt.currentAltitude)
+            ? endOpt.currentAltitude
+            : startAltitude;
+
+        const introFromAlt = introApexAltitudeMeters(startAltitude);
+        const introOutroMs = clampIntroOutroDurationMs(introOutroDurationMs);
+
+        const outroPeakAlt = Math.min(
+          AUTO_ALTITUDE_MAX_M,
+          Math.max(
+            endAlt * BOOKEND_ALT_RATIO,
+            endAlt + BOOKEND_ALT_MIN_DELTA_M,
+          ),
+        );
+
+        const mainOffset = introOutroMs;
+        const tailStart = mainOffset + durationMsTotal;
+        const fullDurationMs =
+          introOutroMs + durationMsTotal + ROUTE_END_HOLD_MS + introOutroMs;
+
+        function pathProgressAt(elapsedMs) {
+          if (elapsedMs < introOutroMs) return 0;
+          if (elapsedMs < tailStart) {
+            return innerPathProgressAt(elapsedMs - mainOffset);
           }
-          if (elapsedMs <= durationMsTotal) return base;
-          const t = elapsedMs - durationMsTotal;
-          if (t < finalZoomMs) {
+          return 1;
+        }
+
+        function optsAtElapsed(elapsedMs) {
+          if (elapsedMs < introOutroMs) {
             const u =
-              finalZoomMs <= 0 ? 1 : smoothstep(Math.max(0, Math.min(1, t / finalZoomMs)));
+              introOutroMs <= 0
+                ? 1
+                : smoothstep(
+                    Math.max(0, Math.min(1, elapsedMs / introOutroMs)),
+                  );
             return {
-              ...base,
-              currentAltitude: lerp(endRouteAlt, shortestLegAlt, u),
+              ...opts,
+              currentAltitude: lerp(introFromAlt, startAltitude, u),
             };
           }
-          return { ...base, currentAltitude: shortestLegAlt };
+          if (elapsedMs < tailStart) {
+            return innerOptsAtElapsed(elapsedMs - mainOffset);
+          }
+          const tailElapsed = elapsedMs - tailStart;
+          const baseAtEnd = innerOptsAtElapsed(durationMsTotal);
+          if (tailElapsed < ROUTE_END_HOLD_MS) {
+            return { ...baseAtEnd, currentAltitude: endAlt };
+          }
+          const outroT = tailElapsed - ROUTE_END_HOLD_MS;
+          if (outroT < introOutroMs) {
+            const u =
+              introOutroMs <= 0
+                ? 1
+                : smoothstep(
+                    Math.max(0, Math.min(1, outroT / introOutroMs)),
+                  );
+            return {
+              ...baseAtEnd,
+              currentAltitude: lerp(endAlt, outroPeakAlt, u),
+            };
+          }
+          return { ...baseAtEnd, currentAltitude: outroPeakAlt };
         }
 
         if (exportMode) {
@@ -2230,7 +2304,7 @@
                 line,
                 pathDistance,
                 0,
-                optsAtElapsed(0),
+                innerOptsAtElapsed(0),
               );
               resolve();
               return;
@@ -2366,7 +2440,8 @@
         const legCount = document.querySelectorAll(
           "#waypoints .leg-control",
         ).length;
-        const totalS = Number(document.getElementById("duration")?.value) || 2;
+        const totalS =
+          Number(document.getElementById("duration")?.value) || MIN_LEG_DURATION_S;
         const perLeg = Math.max(
           MIN_LEG_DURATION_S,
           Math.round((totalS / Math.max(1, legCount)) * 10) / 10,
@@ -2770,13 +2845,15 @@
             map,
             path: currentRoute,
             maxTimePerStep:
-              (Number(document.getElementById("maxTimePerStep").value) || 2) *
+              (Number(document.getElementById("maxTimePerStep").value) ||
+                MIN_LEG_DURATION_S) *
               1000,
             speedup: TRIPRENDER_SPEEDUP,
             manualLegDurations: manualDurations ?? undefined,
             startBearing: TRIPRENDER_DEFAULT_BEARING,
             startAltitude:
               Number(document.getElementById("startAltitude").value) || 400000,
+            introOutroDurationMs: getIntroOutroDurationMsFromInput(),
             pitch: TRIPRENDER_DEFAULT_PITCH,
             lineGradient: document.getElementById("lineGradient").checked,
             cameraFollow: document.getElementById("cameraFollow").checked,
@@ -3091,13 +3168,10 @@
           line,
           pathDistance,
           0,
-          animationOptsForPathPhase(
-            opts,
-            0,
-            baseAltitudeM,
-            legEndProgress,
-            legTargetAltitudes,
-          ),
+          {
+            ...opts,
+            currentAltitude: introApexAltitudeMeters(baseAltitudeM),
+          },
         );
         map.triggerRepaint();
         await new Promise(function (r) {
@@ -3165,7 +3239,8 @@
           await settleMapWithRepaint(map, 26);
 
           const maxTimePerStepExport =
-            (Number(document.getElementById("maxTimePerStep").value) || 2) *
+            (Number(document.getElementById("maxTimePerStep").value) ||
+              MIN_LEG_DURATION_S) *
             1000;
           const speedupExport = TRIPRENDER_SPEEDUP;
           const startBearingExport = TRIPRENDER_DEFAULT_BEARING;
@@ -3331,6 +3406,7 @@
             manualLegDurations: manualDurationsExport ?? undefined,
             startBearing: startBearingExport,
             startAltitude: startAltitudeExport,
+            introOutroDurationMs: getIntroOutroDurationMsFromInput(),
             pitch: pitchExport,
             lineGradient: lineGradientExport,
             cameraFollow: cameraFollowExport,

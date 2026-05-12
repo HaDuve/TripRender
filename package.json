@@ -7,6 +7,7 @@
     "tauri": "tauri",
     "build:web": "node --env-file=.env build.js",
     "dev:server": "node scripts/free-port-1420.js && npm run build:web && npx serve dist -l 1420",
+    "test": "node scripts/test-web.js",
     "tauri:dev": "npm run build:web && node scripts/tauri-with-rustup.js dev",
     "tauri:build": "npm run build:web && node scripts/tauri-with-rustup.js build",
     "tauri:ios": "npm run build:web && node scripts/tauri-with-rustup.js ios dev",
