@@ -1708,12 +1708,18 @@
       const INTRO_OUTRO_DURATION_S_MAX = 60;
       const INTRO_OUTRO_DURATION_MS_MAX = INTRO_OUTRO_DURATION_S_MAX * 1000;
 
-      function introApexAltitudeMeters(startAltM) {
-        const s = Math.max(0, Number(startAltM) || 0);
-        return Math.min(
-          AUTO_ALTITUDE_MAX_M,
-          Math.max(s * BOOKEND_ALT_RATIO, s + BOOKEND_ALT_MIN_DELTA_M),
-        );
+      /**
+       * Bookend altitude closer to the ground than `cruiseAltM`, symmetric to the old
+       * “apex” bookend (ratio + delta) so intro starts close and zooms out, outro ends close.
+       */
+      function bookendNearAltitudeMeters(cruiseAltM) {
+        const s = Math.max(0, Number(cruiseAltM) || 0);
+        if (s <= 0) return 0;
+        const fromRatio = s / BOOKEND_ALT_RATIO;
+        const fromDelta = s - BOOKEND_ALT_MIN_DELTA_M;
+        const candidate = Math.min(fromRatio, fromDelta);
+        const floorAlt = s * SHORT_LEG_ALTITUDE_RATIO;
+        return Math.max(floorAlt, candidate);
       }
 
       function clampIntroOutroDurationMs(ms) {
@@ -2172,16 +2178,10 @@
             ? endOpt.currentAltitude
             : startAltitude;
 
-        const introFromAlt = introApexAltitudeMeters(startAltitude);
+        const introStartAlt = bookendNearAltitudeMeters(startAltitude);
         const introOutroMs = clampIntroOutroDurationMs(introOutroDurationMs);
 
-        const outroPeakAlt = Math.min(
-          AUTO_ALTITUDE_MAX_M,
-          Math.max(
-            endAlt * BOOKEND_ALT_RATIO,
-            endAlt + BOOKEND_ALT_MIN_DELTA_M,
-          ),
-        );
+        const outroEndAlt = bookendNearAltitudeMeters(endAlt);
 
         const mainOffset = introOutroMs;
         const tailStart = mainOffset + durationMsTotal;
@@ -2206,7 +2206,7 @@
                   );
             return {
               ...opts,
-              currentAltitude: lerp(introFromAlt, startAltitude, u),
+              currentAltitude: lerp(introStartAlt, startAltitude, u),
             };
           }
           if (elapsedMs < tailStart) {
@@ -2227,10 +2227,10 @@
                   );
             return {
               ...baseAtEnd,
-              currentAltitude: lerp(endAlt, outroPeakAlt, u),
+              currentAltitude: lerp(endAlt, outroEndAlt, u),
             };
           }
-          return { ...baseAtEnd, currentAltitude: outroPeakAlt };
+          return { ...baseAtEnd, currentAltitude: outroEndAlt };
         }
 
         if (exportMode) {
@@ -3219,7 +3219,7 @@
           0,
           {
             ...opts,
-            currentAltitude: introApexAltitudeMeters(baseAltitudeM),
+            currentAltitude: bookendNearAltitudeMeters(baseAltitudeM),
           },
           ANIM_FRAME_REF_MS,
         );
