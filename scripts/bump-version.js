@@ -6,10 +6,11 @@
  * - iOS build number stays on `npm run build:submit:ios` (--build-number).
  *
  * Usage:
- *   node scripts/bump-version.js [patch|minor|major] [--sync-npm]
+ *   node scripts/bump-version.js [patch|minor|major]
  *   npm run version:bump -- minor
  *
- * --sync-npm: also set package.json + Cargo.toml [package] version + package-lock (requires all three to match current version first).
+ * Always syncs package.json + Cargo.toml [package] version + package-lock (`npm install --package-lock-only`).
+ * Bump level is taken from `src-tauri/tauri.conf.json` `version` (source of truth).
  */
 const fs = require("fs");
 const path = require("path");
@@ -23,21 +24,25 @@ const cargoPath = path.join(root, "src-tauri", "Cargo.toml");
 const SEMVER = /^(\d+)\.(\d+)\.(\d+)$/;
 
 function parseArgs(argv) {
-  let syncNpm = false;
   const pos = [];
   for (const a of argv.slice(2)) {
-    if (a === "--sync-npm") syncNpm = true;
-    else if (a.startsWith("-")) {
+    if (a === "--sync-npm") {
+      console.error(
+        "Note: --sync-npm is no longer needed; npm/package/Cargo sync always runs. Ignoring flag."
+      );
+      continue;
+    }
+    if (a.startsWith("-")) {
       console.error(`Unknown option: ${a}`);
       process.exit(1);
     } else pos.push(a);
   }
   const level = pos[0] || "patch";
   if (!["patch", "minor", "major"].includes(level)) {
-    console.error("Usage: node scripts/bump-version.js [patch|minor|major] [--sync-npm]");
+    console.error("Usage: node scripts/bump-version.js [patch|minor|major]");
     process.exit(1);
   }
-  return { level, syncNpm };
+  return { level };
 }
 
 function parseSemver(s) {
@@ -101,7 +106,7 @@ function setCargoPackageVersion(newVersion) {
 }
 
 function main() {
-  const { level, syncNpm } = parseArgs(process.argv);
+  const { level } = parseArgs(process.argv);
 
   const cfg = readJson(tauriConfPath);
   if (typeof cfg.version !== "string" || !cfg.version.trim()) {
@@ -112,18 +117,13 @@ function main() {
   const current = cfg.version.trim();
   const next = bumpSemver(current, level);
 
-  if (syncNpm) {
-    const pkgV = readPackageVersion();
-    const cargoV = readCargoPackageVersion();
-    if (pkgV !== current || cargoV !== current) {
-      console.error(
-        `Version mismatch for --sync-npm (expected all == ${JSON.stringify(current)}):`
-      );
-      console.error(`  tauri.conf.json  ${current}`);
-      console.error(`  package.json     ${pkgV}`);
-      console.error(`  Cargo.toml       ${cargoV}`);
-      process.exit(1);
-    }
+  const pkgV = readPackageVersion();
+  const cargoV = readCargoPackageVersion();
+  if (pkgV !== current || cargoV !== current) {
+    console.error(
+      `Note: versions were out of sync with tauri.conf.json (${current}); aligning to ${next} after bump.`
+    );
+    console.error(`  package.json was ${pkgV}, Cargo.toml was ${cargoV}`);
   }
 
   cfg.version = next;
@@ -145,20 +145,18 @@ function main() {
   writeJson(tauriConfPath, cfg);
   console.error(`tauri.conf.json version: ${current} -> ${next}`);
 
-  if (syncNpm) {
-    const pkg = readJson(packageJsonPath);
-    pkg.version = next;
-    writeJson(packageJsonPath, pkg);
-    setCargoPackageVersion(next);
-    console.error(`Synced package.json + Cargo.toml -> ${next}`);
+  const pkg = readJson(packageJsonPath);
+  pkg.version = next;
+  writeJson(packageJsonPath, pkg);
+  setCargoPackageVersion(next);
+  console.error(`Synced package.json + Cargo.toml -> ${next}`);
 
-    const r = spawnSync("npm", ["install", "--package-lock-only"], {
-      cwd: root,
-      stdio: "inherit",
-      env: process.env,
-    });
-    if (r.status !== 0) process.exit(r.status ?? 1);
-  }
+  const r = spawnSync("npm", ["install", "--package-lock-only"], {
+    cwd: root,
+    stdio: "inherit",
+    env: process.env,
+  });
+  if (r.status !== 0) process.exit(r.status ?? 1);
 }
 
 main();
