@@ -1462,11 +1462,11 @@
         return MAPBOX_DEFAULT_VERTICAL_FOV_DEG;
       }
 
-      /** Upper clamp (m); 2 Mm was too low for long fly legs — allow orbit-scale framing. */
-      const AUTO_ALTITUDE_MAX_M = 15_000_000;
+      /** Upper clamp (m); headroom for 1.5× fly multiplier on legs already near prior cap. */
+      const AUTO_ALTITUDE_MAX_M = 22_500_000;
 
-      /** Uniform reduction on auto altitude and fallbacks (20% lower). */
-      const ALTITUDE_HEIGHT_GLOBAL_SCALE = 0.8;
+      /** Global scale on auto altitude and fallbacks (1 = match raw framing math). */
+      const ALTITUDE_HEIGHT_GLOBAL_SCALE = 1.0;
 
       /**
        * Scale raw auto altitude: short legs retain 60% (40% dial-back), long legs 80% (20% dial-back),
@@ -1699,14 +1699,17 @@
         return (d / 10000) * ALTITUDE_BLEND_MS_PER_10KM;
       }
 
-      const BOOKEND_ALT_RATIO = 1.35;
-      const BOOKEND_ALT_MIN_DELTA_M = 150000;
+      const BOOKEND_ALT_RATIO = 1.6;
+      const BOOKEND_ALT_MIN_DELTA_M = 160000;
       const ROUTE_END_HOLD_MS = 600;
       const INTRO_OUTRO_DURATION_DEFAULT_MS = 2000;
       const INTRO_OUTRO_DURATION_MS_MIN = 100;
       /** Upper cap for #introOutroDuration (seconds); `max` attribute is synced on load. */
       const INTRO_OUTRO_DURATION_S_MAX = 60;
       const INTRO_OUTRO_DURATION_MS_MAX = INTRO_OUTRO_DURATION_S_MAX * 1000;
+
+      /** Per-leg cruise altitude multiplier when leg mode is Fly (clamped with AUTO_ALTITUDE_MAX_M). */
+      const FLY_LEG_ALTITUDE_MULTIPLIER = 1.5;
 
       /**
        * Bookend altitude closer to the ground than `cruiseAltM`, symmetric to the old
@@ -1801,8 +1804,22 @@
         baseAltitudeM,
         legLengthsKm,
         legMercatorLengthsKm,
+        legModes,
       ) {
         if (!legLengthsKm?.length) return [];
+        const n = legLengthsKm.length;
+        const modesOk =
+          Array.isArray(legModes) && legModes.length === n ? legModes : null;
+        const applyFly = (altM, i) => {
+          let a = altM;
+          if (modesOk && modesOk[i] === "fly") {
+            a = Math.min(
+              AUTO_ALTITUDE_MAX_M,
+              a * FLY_LEG_ALTITUDE_MULTIPLIER,
+            );
+          }
+          return a;
+        };
         const merged = mergeLegKmForAltitude(
           legLengthsKm,
           legMercatorLengthsKm,
@@ -1818,11 +1835,11 @@
           !Number.isFinite(minLen) ||
           !Number.isFinite(maxLen)
         )
-          return effKm.map(() => baseAltitudeM);
+          return effKm.map((_, i) => applyFly(baseAltitudeM, i));
         const span = maxLen - minLen;
-        return effKm.map((len) => {
+        return effKm.map((len, i) => {
           const t = (len - minLen) / span;
-          return lerp(minAlt, baseAltitudeM, t);
+          return applyFly(lerp(minAlt, baseAltitudeM, t), i);
         });
       }
 
@@ -2098,6 +2115,7 @@
                 startAltitude,
                 legLengths,
                 legMercatorLengthsKm,
+                legModesAligned(numLegs),
               )
             : null;
 
@@ -2418,6 +2436,15 @@
         ).map((el) =>
           el.value === "walk" || el.value === "fly" ? el.value : "drive",
         );
+      }
+
+      /** Prefer modes stored with the last successful route; fall back to UI when aligned. */
+      function legModesAligned(numLegs) {
+        const stored = currentRoute?.properties?.legModes;
+        if (Array.isArray(stored) && stored.length === numLegs) return stored;
+        const live = getLegModes();
+        if (live.length === numLegs) return live;
+        return null;
       }
 
       function setLegMode(legIndex, mode) {
@@ -2835,7 +2862,12 @@
           currentRoute = {
             type: "Feature",
             geometry: { type: "LineString", coordinates: route },
-            properties: { legEndProgress, legLengths, legMercatorLengthsKm },
+            properties: {
+              legEndProgress,
+              legLengths,
+              legMercatorLengthsKm,
+              legModes: modes.slice(),
+            },
           };
           animationDirty = false;
           updateAnimationUI();
@@ -3325,6 +3357,7 @@
                   startAltitudeExport,
                   legLengthsWarm,
                   legMercatorLengthsKmWarm,
+                  legModesAligned(numLegsWarm),
                 )
               : null;
           const warmOpts = {
