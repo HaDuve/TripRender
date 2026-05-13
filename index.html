@@ -432,6 +432,108 @@
       #animationControls.expanded {
         max-height: 360px;
       }
+      #historyControls {
+        width: 100%;
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.2s ease-out;
+      }
+      #historyControls.expanded {
+        max-height: 360px;
+      }
+      #historyList {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 2px 0;
+        margin: 0;
+        width: 100%;
+        max-height: 260px;
+        overflow: auto;
+      }
+      .history-empty {
+        font-size: 12px;
+        color: var(--secondary-text);
+        padding: 6px 0;
+      }
+      .history-item {
+        display: flex;
+        gap: 8px;
+        align-items: stretch;
+        position: relative;
+        --history-del-inset: 8px;
+      }
+      .history-load {
+        flex: 1;
+        width: auto;
+        min-width: 0;
+        text-align: left;
+        padding: 8px 10px;
+        padding-right: calc(
+          10px + (2px * 2) + 22px + var(--history-del-inset) + 6px
+        );
+        line-height: 1.2;
+      }
+      .history-title {
+        font-size: 13px;
+        font-weight: 600;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .history-title-line {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .history-meta {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.85);
+      }
+      body:not(.night-mode) .history-meta {
+        color: var(--secondary-text);
+      }
+      .history-delete {
+        position: absolute;
+        right: var(--history-del-inset);
+        top: 6px;
+        transform: none;
+        z-index: 1;
+        width: max-content !important;
+        max-width: max-content !important;
+        height: auto;
+        min-width: 0;
+        min-height: 0;
+        padding: 2px;
+        background: var(--input-bg) !important;
+        color: var(--panel-text) !important;
+        border: 1px solid var(--input-border) !important;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 6px;
+        white-space: nowrap;
+        line-height: 1;
+        font-size: 20px;
+        font-weight: 600;
+      }
+      .history-delete:hover {
+        filter: brightness(0.97);
+      }
+      .history-delete:focus-visible {
+        outline: 2px solid var(--btn-bg);
+        outline-offset: 2px;
+      }
+      #historyClear {
+        width: 100%;
+        max-width: 220px;
+        background: var(--input-bg) !important;
+        color: var(--panel-text) !important;
+        border: 1px solid var(--input-border) !important;
+      }
+      #historyClear:hover {
+        filter: brightness(0.97);
+      }
       #exportStatus {
         font-size: 12px;
         color: var(--secondary-text);
@@ -669,6 +771,31 @@
           max-width: 100%;
           padding: 10px 12px;
           margin: 2px 0;
+        }
+        /* History rows: override global full-width button behavior */
+        .history-item {
+          width: 100%;
+          align-items: stretch;
+          --history-del-inset: 8px;
+        }
+        .history-load {
+          flex: 1;
+          width: auto;
+          min-width: 0;
+        }
+        .history-delete {
+          flex: 0 0 auto;
+          position: absolute;
+          right: var(--history-del-inset);
+          top: 6px;
+          transform: none;
+          z-index: 1;
+          width: max-content !important;
+          max-width: max-content !important;
+          min-width: 0 !important;
+          height: auto !important;
+          min-height: 0 !important;
+          padding: 2px !important;
         }
         .waypoint-row {
           max-width: 100%;
@@ -910,6 +1037,19 @@
                   </optgroup>
                 </select>
               </div>
+            </div>
+            <div
+              class="control-toggle"
+              id="historyToggle"
+              onclick="toggleHistoryControls()"
+            >
+              History
+            </div>
+            <div id="historyControls">
+              <div id="historyList" aria-label="Saved routes"></div>
+              <button id="historyClear" type="button" onclick="clearHistory()">
+                Clear history
+              </button>
             </div>
             <div id="exportStatus"></div>
           </div>
@@ -1388,6 +1528,409 @@
         toggle.classList.toggle("expanded");
         panel.classList.toggle("expanded");
       }
+
+      function toggleHistoryControls() {
+        const toggle = document.getElementById("historyToggle");
+        const panel = document.getElementById("historyControls");
+        if (!toggle || !panel) return;
+        toggle.classList.toggle("expanded");
+        panel.classList.toggle("expanded");
+      }
+
+      const HISTORY_STORAGE_KEY = "tripHistory.v1";
+      const HISTORY_MAX_ITEMS = 10;
+
+      function safeJsonParse(str) {
+        try {
+          return JSON.parse(str);
+        } catch (_) {
+          return null;
+        }
+      }
+
+      function readHistory() {
+        try {
+          const raw = localStorage.getItem(HISTORY_STORAGE_KEY);
+          if (!raw) return [];
+          const data = safeJsonParse(raw);
+          return Array.isArray(data) ? data : [];
+        } catch (_) {
+          return [];
+        }
+      }
+
+      function writeHistory(items) {
+        try {
+          localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(items || []));
+        } catch (_) {}
+      }
+
+      function isValidHistoryItem(x) {
+        if (!x || typeof x !== "object") return false;
+        if (typeof x.id !== "string" || !x.id) return false;
+        if (!Number.isFinite(Number(x.savedAt))) return false;
+        if (!x.inputs || !x.animationSettings) return false;
+        const w = x.inputs.waypointsText;
+        if (!Array.isArray(w) || w.length < 2) return false;
+        if (!x.routeFeature || !x.routeFeature.geometry) return false;
+        const coords = x.routeFeature.geometry.coordinates;
+        if (!Array.isArray(coords) || coords.length < 2) return false;
+        return true;
+      }
+
+      function normalizeHistory(items) {
+        const arr = Array.isArray(items) ? items : [];
+        const cleaned = arr.filter(isValidHistoryItem);
+        cleaned.sort((a, b) => Number(b.savedAt) - Number(a.savedAt));
+        return cleaned.slice(0, HISTORY_MAX_ITEMS);
+      }
+
+      function historyNowId() {
+        return (
+          "h_" +
+          Date.now().toString(36) +
+          "_" +
+          Math.random().toString(36).slice(2, 8)
+        );
+      }
+
+      function historyTitleFromWaypoints(waypointsText) {
+        const w = Array.isArray(waypointsText) ? waypointsText : [];
+        const first = (w[0] || "").trim();
+        const last = (w[w.length - 1] || "").trim();
+        if (first && last) return first + " → " + last;
+        if (first) return first;
+        if (last) return last;
+        return "Saved route";
+      }
+
+      function historyLinesFromWaypoints(waypointsText) {
+        const w = Array.isArray(waypointsText) ? waypointsText : [];
+        const cleaned = w.map((x) => String(x || "").trim()).filter(Boolean);
+        if (!cleaned.length) return [];
+        return cleaned.map((text, idx) => (idx === 0 ? text : "-> " + text));
+      }
+
+      function historyFormatTime(ms) {
+        const t = Number(ms);
+        if (!Number.isFinite(t)) return "";
+        try {
+          return new Date(t).toLocaleString(undefined, {
+            year: "numeric",
+            month: "short",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+        } catch (_) {
+          return "";
+        }
+      }
+
+      function renderHistory(items) {
+        const listEl = document.getElementById("historyList");
+        if (!listEl) return;
+        const normalized = normalizeHistory(items);
+        listEl.innerHTML = "";
+        if (!normalized.length) {
+          const empty = document.createElement("div");
+          empty.className = "history-empty";
+          empty.textContent = "No saved routes yet.";
+          listEl.appendChild(empty);
+          return;
+        }
+        normalized.forEach((it) => {
+          const row = document.createElement("div");
+          row.className = "history-item";
+
+          const loadBtn = document.createElement("button");
+          loadBtn.type = "button";
+          loadBtn.className = "history-load";
+          loadBtn.onclick = function () {
+            loadTripFromHistory(it.id);
+          };
+
+          const title = document.createElement("div");
+          title.className = "history-title";
+          const lines = historyLinesFromWaypoints(it.inputs?.waypointsText);
+          if (lines.length) {
+            lines.forEach((line) => {
+              const lineEl = document.createElement("div");
+              lineEl.className = "history-title-line";
+              lineEl.textContent = line;
+              title.appendChild(lineEl);
+            });
+          } else {
+            const fallbackLine = document.createElement("div");
+            fallbackLine.className = "history-title-line";
+            fallbackLine.textContent =
+              it.title || historyTitleFromWaypoints(it.inputs?.waypointsText);
+            title.appendChild(fallbackLine);
+          }
+
+          const meta = document.createElement("div");
+          meta.className = "history-meta";
+          meta.textContent = historyFormatTime(it.savedAt);
+
+          loadBtn.appendChild(title);
+          loadBtn.appendChild(meta);
+
+          const delBtn = document.createElement("button");
+          delBtn.type = "button";
+          delBtn.className = "history-delete";
+          delBtn.textContent = "×";
+          delBtn.setAttribute("aria-label", "Delete");
+          delBtn.onclick = function (ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            deleteHistoryItem(it.id);
+          };
+
+          row.appendChild(loadBtn);
+          row.appendChild(delBtn);
+          listEl.appendChild(row);
+        });
+      }
+
+      function deleteHistoryItem(id) {
+        const items = normalizeHistory(readHistory());
+        const next = items.filter((x) => x.id !== id);
+        writeHistory(next);
+        renderHistory(next);
+      }
+
+      function clearHistory() {
+        writeHistory([]);
+        renderHistory([]);
+      }
+
+      function historySettingsFromUI() {
+        return {
+          durationSec: Number(document.getElementById("duration")?.value) || 3,
+          introOutroDurationSec:
+            Number(document.getElementById("introOutroDuration")?.value) || 2,
+          lineGradient: !!document.getElementById("lineGradient")?.checked,
+          cameraFollow: !!document.getElementById("cameraFollow")?.checked,
+          bearingChange: !!document.getElementById("bearingChange")?.checked,
+          startAltitude: Number(document.getElementById("startAltitude")?.value) || 400000,
+          exportSize: String(document.getElementById("exportSize")?.value || ""),
+        };
+      }
+
+      function historyInputsFromUI() {
+        const waypointsText = Array.from(getWaypointInputs()).map((el) =>
+          (el.value || "").trim(),
+        );
+        const legModes = getLegModes();
+        const manualEnabled = !!document.getElementById("editDurationsManually")?.checked;
+        const manualLegDurationsSec = Array.from(
+          document.querySelectorAll("#waypoints .leg-duration-input"),
+        ).map((el) => Number(el.value) || MIN_LEG_DURATION_S);
+        return {
+          waypointsText,
+          legModes,
+          manualLegDurationsEnabled: manualEnabled,
+          manualLegDurationsSec,
+        };
+      }
+
+      function deepCopyJson(x) {
+        try {
+          return JSON.parse(JSON.stringify(x));
+        } catch (_) {
+          return null;
+        }
+      }
+
+      function historyItemEquivalent(a, b) {
+        if (!a || !b) return false;
+        const aw = a.inputs?.waypointsText;
+        const bw = b.inputs?.waypointsText;
+        const am = a.inputs?.legModes;
+        const bm = b.inputs?.legModes;
+        const as = a.animationSettings;
+        const bs = b.animationSettings;
+        const ac = a.routeFeature?.geometry?.coordinates;
+        const bc = b.routeFeature?.geometry?.coordinates;
+        if (!Array.isArray(aw) || !Array.isArray(bw)) return false;
+        if (!Array.isArray(am) || !Array.isArray(bm)) return false;
+        if (!as || !bs) return false;
+        if (!Array.isArray(ac) || !Array.isArray(bc)) return false;
+        if (ac.length !== bc.length) return false;
+        if (aw.length !== bw.length) return false;
+        if (am.length !== bm.length) return false;
+        for (let i = 0; i < aw.length; i++) if (String(aw[i]) !== String(bw[i])) return false;
+        for (let i = 0; i < am.length; i++) if (String(am[i]) !== String(bm[i])) return false;
+        const keys = [
+          "durationSec",
+          "introOutroDurationSec",
+          "lineGradient",
+          "cameraFollow",
+          "bearingChange",
+          "startAltitude",
+          "exportSize",
+        ];
+        for (let i = 0; i < keys.length; i++) {
+          const k = keys[i];
+          if (String(as[k]) !== String(bs[k])) return false;
+        }
+        return true;
+      }
+
+      function saveCurrentTripToHistory() {
+        if (!currentRoute) return;
+        const inputs = historyInputsFromUI();
+        if (!inputs.waypointsText.filter(Boolean).length) return;
+        const settings = historySettingsFromUI();
+        const routeFeature = deepCopyJson(currentRoute);
+        if (!routeFeature) return;
+        const now = Date.now();
+        const nextItem = {
+          id: historyNowId(),
+          savedAt: now,
+          title: historyTitleFromWaypoints(inputs.waypointsText),
+          inputs,
+          animationSettings: settings,
+          routeFeature,
+        };
+
+        const items = normalizeHistory(readHistory());
+        const head = items[0];
+        if (head && historyItemEquivalent(head, nextItem)) {
+          head.savedAt = now;
+          head.title = nextItem.title;
+          head.inputs = nextItem.inputs;
+          head.animationSettings = nextItem.animationSettings;
+          head.routeFeature = nextItem.routeFeature;
+          const updated = normalizeHistory(items);
+          writeHistory(updated);
+          renderHistory(updated);
+          return;
+        }
+
+        const updated = normalizeHistory([nextItem, ...items]);
+        writeHistory(updated);
+        renderHistory(updated);
+      }
+
+      function setWaypointsUIFromHistory(waypointsText) {
+        const texts = Array.isArray(waypointsText) ? waypointsText : [];
+        const safe = texts.length >= 2 ? texts : ["", ""];
+        const container = document.getElementById("waypoints");
+        if (!container) return;
+        container.innerHTML = "";
+        for (let i = 0; i < safe.length; i++) {
+          const placeholder =
+            i === 0 ? "Start" : i === safe.length - 1 ? "End" : "Stop";
+          container.appendChild(createWaypointRow(placeholder));
+          if (i < safe.length - 1) container.appendChild(createLegControl());
+        }
+        const inputs = getWaypointInputs();
+        inputs.forEach((el, i) => {
+          if (safe[i] != null) el.value = String(safe[i]);
+        });
+        updateAddStopState();
+        updateTotalDurationMinAttribute();
+      }
+
+      function applyHistoryManualDurations(inputs) {
+        const cb = document.getElementById("editDurationsManually");
+        if (!cb) return;
+        cb.checked = !!inputs.manualLegDurationsEnabled;
+        cb.dispatchEvent(new Event("change"));
+
+        if (!cb.checked) return;
+        const values = Array.isArray(inputs.manualLegDurationsSec)
+          ? inputs.manualLegDurationsSec
+          : [];
+        const durEls = document.querySelectorAll("#waypoints .leg-duration-input");
+        durEls.forEach((el, i) => {
+          const v = Number(values[i]);
+          if (Number.isFinite(v) && v > 0) el.value = String(v);
+        });
+        syncDurationFromLegInputs();
+      }
+
+      function applyHistoryAnimationSettings(settings) {
+        const s = settings || {};
+        const setNum = (id, v) => {
+          const el = document.getElementById(id);
+          if (el) el.value = String(v);
+        };
+        const setCheck = (id, v) => {
+          const el = document.getElementById(id);
+          if (el) el.checked = !!v;
+        };
+        const setSelect = (id, v) => {
+          const el = document.getElementById(id);
+          if (el) el.value = String(v);
+        };
+        setNum("duration", Number(s.durationSec) || 3);
+        setNum("introOutroDuration", Number(s.introOutroDurationSec) || 2);
+        setCheck("lineGradient", !!s.lineGradient);
+        setCheck("cameraFollow", !!s.cameraFollow);
+        setCheck("bearingChange", !!s.bearingChange);
+        setNum("startAltitude", Number(s.startAltitude) || 400000);
+        if (s.exportSize) setSelect("exportSize", s.exportSize);
+        onAnimationParamChange();
+      }
+
+      function whenStyleReady(fn) {
+        const run = () => {
+          try {
+            fn();
+          } catch (_) {}
+        };
+        try {
+          if (typeof map?.isStyleLoaded === "function" && map.isStyleLoaded())
+            return run();
+        } catch (_) {}
+        try {
+          const st = typeof map?.getStyle === "function" ? map.getStyle() : null;
+          if (st) return run();
+        } catch (_) {}
+        map.once("style.load", run);
+      }
+
+      function restoreRouteFeatureOnMap(routeFeature) {
+        const coords = routeFeature?.geometry?.coordinates;
+        if (!Array.isArray(coords) || coords.length < 2) return;
+        whenStyleReady(() => {
+          addRouteLayerFromCoords(coords);
+        });
+        try {
+          const bounds = new mapboxgl.LngLatBounds();
+          coords.forEach((c) => bounds.extend(c));
+          map.fitBounds(bounds, { padding: 50, pitch: 20, bearing: 0 });
+        } catch (_) {}
+      }
+
+      function loadTripFromHistory(id) {
+        const items = normalizeHistory(readHistory());
+        const item = items.find((x) => x.id === id);
+        if (!item) return;
+        const w = item.inputs?.waypointsText;
+        setWaypointsUIFromHistory(w);
+
+        const legModes = Array.isArray(item.inputs?.legModes) ? item.inputs.legModes : [];
+        for (let i = 0; i < legModes.length; i++) {
+          setLegMode(i, legModes[i]);
+        }
+
+        applyHistoryManualDurations(item.inputs || {});
+        applyHistoryAnimationSettings(item.animationSettings || {});
+
+        currentRoute = deepCopyJson(item.routeFeature) || item.routeFeature;
+        animationDirty = false;
+        updateAnimationUI();
+        restoreRouteFeatureOnMap(currentRoute);
+      }
+
+      (function initHistoryUI() {
+        const items = normalizeHistory(readHistory());
+        writeHistory(items);
+        renderHistory(items);
+      })();
 
       const MIN_LEG_DURATION_S = 3;
       const MAX_LEG_DURATION_S = 60;
@@ -2994,6 +3537,7 @@
         animationControls.stopRequested = false;
         animationControls.pauseRequested = false;
         updateAnimationUI();
+        saveCurrentTripToHistory();
         try {
           const legEndProgress = currentRoute?.properties?.legEndProgress ?? [
             1,
