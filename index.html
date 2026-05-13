@@ -1462,11 +1462,11 @@
         return MAPBOX_DEFAULT_VERTICAL_FOV_DEG;
       }
 
-      /** Upper clamp (m); headroom for 1.5× fly multiplier on legs already near prior cap. */
-      const AUTO_ALTITUDE_MAX_M = 22_500_000;
+      /** Upper clamp (m); headroom for 2× fly multiplier on legs near cruise cap. */
+      const AUTO_ALTITUDE_MAX_M = 30_000_000;
 
-      /** Global scale on auto altitude and fallbacks (1 = match raw framing math). */
-      const ALTITUDE_HEIGHT_GLOBAL_SCALE = 1.0;
+      /** Global scale on auto altitude and fallbacks (>1 = higher camera during travel). */
+      const ALTITUDE_HEIGHT_GLOBAL_SCALE = 1.725;
 
       /**
        * Scale raw auto altitude: short legs retain 60% (40% dial-back), long legs 80% (20% dial-back),
@@ -1699,8 +1699,8 @@
         return (d / 10000) * ALTITUDE_BLEND_MS_PER_10KM;
       }
 
-      const BOOKEND_ALT_RATIO = 1.6;
-      const BOOKEND_ALT_MIN_DELTA_M = 160000;
+      const BOOKEND_ALT_RATIO = 1.85;
+      const BOOKEND_ALT_MIN_DELTA_M = 185000;
       const ROUTE_END_HOLD_MS = 600;
       const INTRO_OUTRO_DURATION_DEFAULT_MS = 2000;
       const INTRO_OUTRO_DURATION_MS_MIN = 100;
@@ -1708,7 +1708,7 @@
       const INTRO_OUTRO_DURATION_S_MAX = 60;
       const INTRO_OUTRO_DURATION_MS_MAX = INTRO_OUTRO_DURATION_S_MAX * 1000;
 
-      /** Per-leg cruise altitude multiplier when leg mode is Fly (clamped with AUTO_ALTITUDE_MAX_M). */
+      /** Per-leg cruise altitude multiplier when leg mode is Fly (1.5× baseline cruise for that leg). */
       const FLY_LEG_ALTITUDE_MULTIPLIER = 1.5;
 
       /**
