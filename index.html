@@ -1399,6 +1399,79 @@
       const TRIPRENDER_DEFAULT_BEARING = 0;
       const TRIPRENDER_DEFAULT_PITCH = 20;
 
+      /** Duration weighting: 0<β<1 gives short legs relatively more time than proportional. */
+      const LEG_DURATION_LENGTH_EXPONENT = 0.5;
+      /** Blend between β-weighted and proportional durations (1=all β-weighted). */
+      const LEG_DURATION_BLEND_ALPHA = 0.75;
+
+      function allocateLegDurationsMs(totalDurationMs, legLengthsKm, beta) {
+        const lens = Array.isArray(legLengthsKm) ? legLengthsKm : [];
+        const n = lens.length;
+        if (!n) return [];
+
+        const totalMs = Math.max(n * MIN_LEG_DURATION_MS, Number(totalDurationMs) || 0);
+        const epsKm = 1e-6;
+        const sumL = lens.reduce((a, b) => a + Math.max(0, Number(b) || 0), 0);
+        const safeSumL = Math.max(epsKm, sumL);
+
+        const safeBeta = Math.max(0.05, Math.min(0.95, Number(beta) || LEG_DURATION_LENGTH_EXPONENT));
+        const weights = lens.map((L) => Math.pow(Math.max(epsKm, Math.max(0, Number(L) || 0)), safeBeta));
+        const sumW = Math.max(epsKm, weights.reduce((a, b) => a + b, 0));
+
+        const alpha = Math.max(0, Math.min(1, Number(LEG_DURATION_BLEND_ALPHA) || 0));
+        const raw = lens.map((L, i) => {
+          const li = Math.max(0, Number(L) || 0);
+          const proportional = (totalMs * li) / safeSumL;
+          const betaWeighted = (totalMs * weights[i]) / sumW;
+          return alpha * betaWeighted + (1 - alpha) * proportional;
+        });
+
+        const d = raw.map((x) =>
+          Math.max(MIN_LEG_DURATION_MS, Math.min(MAX_LEG_DURATION_MS, Number(x) || 0)),
+        );
+
+        // Renormalize while respecting per-leg clamps.
+        for (let iter = 0; iter < n + 3; iter++) {
+          const sumD = d.reduce((a, b) => a + b, 0);
+          const remaining = totalMs - sumD;
+          if (Math.abs(remaining) <= 1) break;
+
+          const adjustable = [];
+          for (let i = 0; i < n; i++) {
+            const atMin = d[i] <= MIN_LEG_DURATION_MS + 1e-9;
+            const atMax = d[i] >= MAX_LEG_DURATION_MS - 1e-9;
+            if ((remaining > 0 && !atMax) || (remaining < 0 && !atMin)) {
+              adjustable.push(i);
+            }
+          }
+          if (!adjustable.length) break;
+
+          const baseWeights = adjustable.map((i) => Math.max(1e-9, raw[i]));
+          const baseSum = baseWeights.reduce((a, b) => a + b, 0);
+          for (let j = 0; j < adjustable.length; j++) {
+            const i = adjustable[j];
+            const share = baseWeights[j] / baseSum;
+            d[i] = Math.max(
+              MIN_LEG_DURATION_MS,
+              Math.min(MAX_LEG_DURATION_MS, d[i] + remaining * share),
+            );
+          }
+        }
+
+        // Final rounding: keep sum stable by adjusting the max leg.
+        const rounded = d.map((x) => Math.round(x));
+        const delta = Math.round(totalMs - rounded.reduce((a, b) => a + b, 0));
+        if (delta !== 0) {
+          let k = 0;
+          for (let i = 1; i < n; i++) if (rounded[i] > rounded[k]) k = i;
+          rounded[k] = Math.max(
+            MIN_LEG_DURATION_MS,
+            Math.min(MAX_LEG_DURATION_MS, rounded[k] + delta),
+          );
+        }
+        return rounded;
+      }
+
       /**
        * Inverse of summing getLegDurations: given total duration and leg lengths,
        * returns the cap maxTimePerStep (ms) used by getLegDurations.
@@ -1430,11 +1503,12 @@
         const durationMs =
           (Number(document.getElementById("duration")?.value) ||
             MIN_LEG_DURATION_S) * 1000;
-        const maxMs = maxTimePerStepMsFromTotalDuration(
+        const durs = allocateLegDurationsMs(
           durationMs,
           legLengths,
-          TRIPRENDER_SPEEDUP,
+          LEG_DURATION_LENGTH_EXPONENT,
         );
+        const maxMs = durs.length ? Math.max(...durs) : MIN_LEG_DURATION_MS;
         const el = document.getElementById("maxTimePerStep");
         if (el) el.value = Math.round((maxMs / 1000) * 100) / 100;
       }
@@ -1475,7 +1549,8 @@
       function autoAltitudeDialBackFactor(effectiveLegM) {
         const L = Math.max(0, Number(effectiveLegM) || 0);
         const t = Math.max(0, Math.min(1, L / (Math.PI * EARTH_RADIUS_M)));
-        return lerp(0.6, 0.8, t);
+        // Short routes: zoom in a bit more; long routes: keep current framing.
+        return lerp(0.3, 1.0, t);
       }
 
       /**
@@ -1589,15 +1664,10 @@
           const durationMs =
             (Number(document.getElementById("duration")?.value) ||
               MIN_LEG_DURATION_S) * 1000;
-          const maxTimePerStepMs = maxTimePerStepMsFromTotalDuration(
+          const durs = allocateLegDurationsMs(
             durationMs,
             legLengths,
-            TRIPRENDER_SPEEDUP,
-          );
-          const durs = getLegDurations(
-            legLengths,
-            maxTimePerStepMs,
-            TRIPRENDER_SPEEDUP,
+            LEG_DURATION_LENGTH_EXPONENT,
           );
           if (durs && durs.length === numLegs) {
             inputs.forEach((el, i) => {
@@ -1680,13 +1750,23 @@
         const safeMax = Math.max(0, Number(maxTimePerStep) || MIN_LEG_DURATION_MS);
         const maxLegLength = Math.max(...legLengths, 0);
         if (maxLegLength === 0) return legLengths.map(() => safeMax);
+        if (safeSpeedup === 1) {
+          const durationMs =
+            (Number(document.getElementById("duration")?.value) ||
+              MIN_LEG_DURATION_S) * 1000;
+          return allocateLegDurationsMs(
+            durationMs,
+            legLengths,
+            LEG_DURATION_LENGTH_EXPONENT,
+          );
+        }
         const minDur = safeMax / safeSpeedup;
         const range = safeMax - minDur;
         return legLengths.map((len) => minDur + range * (len / maxLegLength));
       }
 
       /** Shortest leg uses this fraction of base altitude; longest leg uses full base altitude. */
-      const SHORT_LEG_ALTITUDE_RATIO = 0.1;
+      const SHORT_LEG_ALTITUDE_RATIO = 0.32;
       /** Used only by animationOptsForPathPhase (export pre-roll / warm frames). */
       const LEG_ALTITUDE_BLEND_PORTION = 0.3;
 
